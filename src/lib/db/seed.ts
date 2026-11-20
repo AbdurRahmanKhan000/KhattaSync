@@ -30,6 +30,9 @@ export async function loadSampleShopData(force = false): Promise<{ customers: nu
   for (const l of SAMPLE_SHOP_ENTRY_LOGS) await tx.objectStore(STORE_ENTRY_LOGS).put(l);
   await tx.done;
   await recalculateAllBalances();
+  // Tell the dashboard provider to reload — otherwise the sidebar and
+  // table keep showing the pre-seed (empty) state until a full refresh.
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("khattasync:data-changed"));
   await saveSettings({ ...DEFAULT_SETTINGS, shopName: "Peshawar General Store", demoDataLoaded: true });
   return {
     customers: SAMPLE_SHOP_CUSTOMERS.length,

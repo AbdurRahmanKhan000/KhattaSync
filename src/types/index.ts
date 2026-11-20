@@ -20,6 +20,8 @@ export interface LedgerEntry {
   updatedAt: string;
   source: EntrySource;
   rawInput?: string;
+  /** Itemised breakdown from the AI parse, when available. */
+  items?: LedgerItem[];
 }
 
 /** Alias: a transaction IS a ledger entry in KhattaSync. */

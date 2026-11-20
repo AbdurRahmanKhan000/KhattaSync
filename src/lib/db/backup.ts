@@ -31,6 +31,10 @@ export function isValidBackup(data: unknown): data is BackupData {
 }
 
 /** Import a backup: validates first, then replaces local data in one transaction per store. Returns counts so the UI can confirm. */
+function notifyLocalDataChanged(): void {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("khattasync:data-changed"));
+}
+
 export async function importBackup(data: unknown): Promise<{ customers: number; transactions: number; entryLogs: number }> {
   if (!isValidBackup(data)) throw new Error("That file is not a valid KhattaSync backup.");
   const db = await getDB();
@@ -46,6 +50,7 @@ export async function importBackup(data: unknown): Promise<{ customers: number; 
   for (const l of data.entryLogs) await tx.objectStore(STORE_ENTRY_LOGS).put(l);
   if (data.settings) await tx.objectStore(STORE_SETTINGS).put(data.settings);
   await tx.done;
+  notifyLocalDataChanged();
   return { customers: data.customers.length, transactions: data.transactions.length, entryLogs: data.entryLogs.length };
 }
 
@@ -60,4 +65,5 @@ export async function clearAllLocalData(): Promise<void> {
     tx.objectStore(STORE_SETTINGS).clear(),
   ]);
   await tx.done;
+  notifyLocalDataChanged();
 }
