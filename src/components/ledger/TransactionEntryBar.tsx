@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Plus, Sparkles } from "lucide-react";
 import type { AiKeyMode, CustomerAccount, ParsedLedgerResult } from "@/types";
 import { answerLedgerQuery } from "@/lib/ledger-query";
+import { PROVIDER_LABELS, detectProvider } from "@/lib/ai/providers";
 import { VoiceRecorder } from "./VoiceRecorder";
 
 export function TransactionEntryBar({ onParsed, apiKey, hostKeyAllowed, model, thinkingBudget, audioEnabled = true, apiMode, customers = [], totalUdhaar = 0, collectedToday = 0 }: {
@@ -13,19 +14,31 @@ export function TransactionEntryBar({ onParsed, apiKey, hostKeyAllowed, model, t
   const [text, setText] = useState("");
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [answer, setAnswer] = useState<string | null>(null);
   const [lang, setLang] = useState<"en-PK" | "ur-PK" | "ps-AF">("en-PK");
   const [voiceNote, setVoiceNote] = useState(false);
 
+  // Which AI is behind this bar: the host key is Gemini; a personal key is
+  // detected from the key itself. Only Gemini transcribes raw audio — an
+  // OpenAI or Claude key uses live speech transcription instead.
+  const provider = apiKey ? detectProvider(apiKey) ?? "gemini" : "gemini";
+  const voiceMode = apiMode === "none" || provider !== "gemini" ? "speech" : "audio";
+
+  function showError(message: string, detail?: string) {
+    setError(message);
+    setErrorDetail(detail ?? null);
+  }
+
   /** Gemini voice-note path: audio -> Gemini transcribes + parses it. */
   async function submitVoiceNote(blob: Blob) {
     if (processing) return;
     if (apiMode === "none") {
-      setError("No AI key available — add your Gemini key in Settings, or ask the Admin to restore the host key.");
+      showError("No AI key available — add your AI key in Settings, or ask the Admin to restore the host key.");
       return;
     }
-    setProcessing(true); setVoiceNote(true); setError(null); setSuccess(null);
+    setProcessing(true); setVoiceNote(true); setError(null); setErrorDetail(null); setSuccess(null);
     try {
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -37,16 +50,16 @@ export function TransactionEntryBar({ onParsed, apiKey, hostKeyAllowed, model, t
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "voice", audio: base64, mimeType: blob.type || "audio/webm", apiKey, hostKeyAllowed: hostKeyAllowed !== false, model, thinkingBudget }),
       });
-      const data = (await res.json()) as { ok?: boolean; error?: string; parsed?: ParsedLedgerResult };
+      const data = (await res.json()) as { ok?: boolean; error?: string; detail?: string; parsed?: ParsedLedgerResult };
       if (!res.ok || !data.parsed?.is_valid_ledger_entry) {
-        setError(data.error ?? "Could not understand that voice note — try again, or type the entry.");
+        showError(data.error ?? "Could not understand that voice note — try again, or type the entry.", data.detail);
         return;
       }
       setSuccess(`${data.parsed.customer_name} · ${data.parsed.total_amount} PKR · ${data.parsed.action_type}`);
       setAnswer(null);
       onParsed?.(data.parsed, "(voice note)", "voice");
     } catch {
-      setError("Voice note failed — check your connection or API key in Settings.");
+      showError("Voice note failed — check your connection or API key in Settings.");
     } finally { setProcessing(false); setVoiceNote(false); }
   }
 
@@ -56,28 +69,28 @@ export function TransactionEntryBar({ onParsed, apiKey, hostKeyAllowed, model, t
     // 1) Balance questions are answered instantly from the local ledger.
     const localAnswer = answerLedgerQuery(input, { customers, totalUdhaar, collectedToday });
     if (localAnswer) {
-      setAnswer(localAnswer); setError(null); setSuccess(null); setText("");
+      setAnswer(localAnswer); setError(null); setErrorDetail(null); setSuccess(null); setText("");
       return;
     }
     // 2) No amount and no question: ask for the amount instead of
     //    rejecting a hurried shopkeeper with the ledger-only message.
     if (!/\d/.test(input)) {
-      setError("Add the amount — e.g. \"Bilal took flour 3200, paid 2000\". Who, what, and how much?");
+      showError("Add the amount — e.g. \"Bilal took flour 3200, paid 2000\". Who, what, and how much?");
       return;
     }
     if (apiMode === "none") {
-      setError("No AI key available — add your Gemini key in Settings, or ask the Admin to restore the host key.");
+      showError("No AI key available — add your AI key in Settings, or ask the Admin to restore the host key.");
       return;
     }
-    setProcessing(true); setError(null); setSuccess(null);
+    setProcessing(true); setError(null); setErrorDetail(null); setSuccess(null);
     try {
       const res = await fetch("/api/parse-ledger", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ input, apiKey, hostKeyAllowed: hostKeyAllowed !== false, model, thinkingBudget }),
       });
-      const data = (await res.json()) as { ok?: boolean; error?: string; parsed?: ParsedLedgerResult };
+      const data = (await res.json()) as { ok?: boolean; error?: string; detail?: string; parsed?: ParsedLedgerResult };
       if (!res.ok || !data.parsed?.is_valid_ledger_entry) {
-        setError(data.error ?? "Could not parse that entry. Try: name, amount, gave or got.");
+        showError(data.error ?? "Could not parse that entry. Try: name, amount, gave or got.", data.detail);
         return;
       }
       setSuccess(`${data.parsed.customer_name} · ${data.parsed.total_amount} PKR · ${data.parsed.action_type}`);
@@ -85,7 +98,7 @@ export function TransactionEntryBar({ onParsed, apiKey, hostKeyAllowed, model, t
       onParsed?.(data.parsed, input, source);
       setText("");
     } catch {
-      setError("AI parsing failed — check your connection or API key in Settings.");
+      showError("AI parsing failed — check your connection or API key in Settings.");
     } finally { setProcessing(false); }
   }
 
@@ -103,7 +116,7 @@ export function TransactionEntryBar({ onParsed, apiKey, hostKeyAllowed, model, t
             <option value="ur-PK">Urdu</option>
             <option value="ps-AF">Pashto</option>
           </select>
-          <VoiceRecorder language={lang} mode={apiMode === "none" ? "speech" : "gemini"} disabled={processing || !audioEnabled}
+          <VoiceRecorder language={lang} mode={voiceMode} disabled={processing || !audioEnabled}
             onTranscript={(t) => setText((prev) => (prev ? `${prev} ${t}` : t))}
             onAudio={(blob) => void submitVoiceNote(blob)} />
           <button type="submit" disabled={processing || !text.trim()} className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50">
@@ -113,12 +126,17 @@ export function TransactionEntryBar({ onParsed, apiKey, hostKeyAllowed, model, t
       </form>
       {processing ? (
         <div className="space-y-2" aria-label="Parsing entry">
-          <div className="flex items-center gap-2 text-xs text-stone-500"><Sparkles className="h-3 w-3" /> {voiceNote ? "Gemini is listening to your voice note…" : "Parsing with Gemini…"}</div>
+          <div className="flex items-center gap-2 text-xs text-stone-500"><Sparkles className="h-3 w-3" /> {voiceNote ? "Gemini is listening to your voice note…" : `Parsing with ${PROVIDER_LABELS[provider]}…`}</div>
           <div className="h-4 w-3/4 animate-pulse rounded bg-stone-200" />
           <div className="h-4 w-1/2 animate-pulse rounded bg-stone-200" />
         </div>
       ) : null}
-      {error ? <p role="alert" className="text-sm text-red-700">{error}</p> : null}
+      {error ? (
+        <div role="alert">
+          <p className="text-sm text-red-700">{error}</p>
+          {errorDetail ? <p className="mt-1 text-xs text-red-600">Provider said: {errorDetail}</p> : null}
+        </div>
+      ) : null}
       {answer ? <p role="status" className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">{answer}</p> : null}
       {success ? <p role="status" className="text-sm text-emerald-700">Saved: {success}</p> : null}
       {!audioEnabled ? <p className="text-xs text-stone-500">Voice input is disabled by the Admin — typing still works.</p> : null}

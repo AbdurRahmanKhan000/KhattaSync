@@ -1,9 +1,10 @@
 import { formatPKR } from "@/lib/utils";
 import type { AiKeyMode } from "@/types";
+import { PROVIDER_LABELS, type AiProvider } from "@/lib/ai/providers";
 import { ApiModeBadge } from "./ApiModeBadge";
 
-export function KpiHeader({ totalUdhaar, collectedToday, activeCustomers, apiMode, loading }: {
-  totalUdhaar: number; collectedToday: number; activeCustomers: number; apiMode: AiKeyMode; loading: boolean;
+export function KpiHeader({ totalUdhaar, collectedToday, activeCustomers, apiMode, apiProvider, loading }: {
+  totalUdhaar: number; collectedToday: number; activeCustomers: number; apiMode: AiKeyMode; apiProvider?: AiProvider; loading: boolean;
 }) {
   const cards = [
     { label: "Total Udhaar", sub: "Total outstanding credit", value: formatPKR(totalUdhaar) },
@@ -30,8 +31,8 @@ export function KpiHeader({ totalUdhaar, collectedToday, activeCustomers, apiMod
           ))}
           <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">API Mode</p>
-            <div className="mt-3"><ApiModeBadge mode={apiMode} /></div>
-            <p className="mt-2 text-xs text-stone-500">AI parsing key in use right now.</p>
+            <div className="mt-3"><ApiModeBadge mode={apiMode} provider={apiProvider} /></div>
+            <p className="mt-2 text-xs text-stone-500">AI parsing key in use right now{apiProvider ? ` · ${PROVIDER_LABELS[apiProvider]}` : ""}.</p>
           </div>
         </>
       )}

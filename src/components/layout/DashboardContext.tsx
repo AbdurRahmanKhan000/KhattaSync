@@ -5,6 +5,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { AdminConfig, AiKeyMode, AppSettings, CustomerAccount, LedgerEntry } from "@/types";
 import { getAdminConfig, getSettings, listCustomers, listTransactions } from "@/lib/db";
+import { detectProvider, type AiProvider } from "@/lib/ai/providers";
 
 export interface DashboardState {
   customers: CustomerAccount[];
@@ -15,6 +16,8 @@ export interface DashboardState {
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
   apiMode: AiKeyMode;
+  /** Which provider's key is in use: "gemini" for the host key, or detected from the user's own key. */
+  apiProvider: AiProvider;
   userApiKey?: string;
   adminConfig: AdminConfig | null;
   settings: AppSettings | null;
@@ -71,12 +74,15 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     : adminConfig?.hostKeyWithdrawn || hostKeyConfigured === false
       ? "none"
       : "host";
+  const apiProvider: AiProvider = settings?.geminiApiKey
+    ? detectProvider(settings.geminiApiKey) ?? "gemini"
+    : "gemini";
 
   const value = useMemo<DashboardState>(() => ({
     customers, transactions, loading, selectedCustomerId, setSelectedCustomerId,
-    sidebarOpen, setSidebarOpen, apiMode, userApiKey: settings?.geminiApiKey,
+    sidebarOpen, setSidebarOpen, apiMode, apiProvider, userApiKey: settings?.geminiApiKey,
     adminConfig, settings, today, reload,
-  }), [customers, transactions, loading, selectedCustomerId, sidebarOpen, apiMode, settings, adminConfig, today, reload]);
+  }), [customers, transactions, loading, selectedCustomerId, sidebarOpen, apiMode, apiProvider, settings, adminConfig, today, reload]);
 
   return <DashboardContext.Provider value={value}>{children}</DashboardContext.Provider>;
 }

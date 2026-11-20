@@ -1,7 +1,7 @@
 /**
  * End-to-end audit checks (run against a production server at BASE_URL).
  * 1) Guardrails: 7 off-topic / injection prompts must be blocked BEFORE any
- *    Gemini call — live, through POST /api/parse-ledger (200 + ok:false,
+ *    AI call — live, through POST /api/parse-ledger (200 + ok:false,
  *    exact ledger-only message, so no console error is logged).
  * 2) Secrets: no NEXT_PUBLIC_GEMINI_API_KEY in source; the string
  *    "GEMINI_API_KEY" must not appear in any client bundle chunk.
@@ -10,6 +10,10 @@
  * 4) Admin Vault: wrong password rejected, correct password unlocks
  *    (hash-verified, no plaintext comparison).
  * 5) Resilience: friendly messages for 429 / invalid-key / network failures.
+ * 6) Multi-provider: the same bar accepts a Gemini, OpenAI, or Claude key;
+ *    each provider's fake key is rejected with that provider's name, an
+ *    unknown key is refused plainly, and the Settings "Test" (ping) action
+ *    returns the provider's own error as `detail`.
  * Usage: BASE_URL=http://localhost:3000 npx tsx scripts/verify-audit.ts
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -112,6 +116,49 @@ async function main() {
     });
     const data = (await res.json()) as { ok?: boolean; error?: string };
     check("Live voice action with a fake key => friendly key rejection", data.ok === false && /rejected/i.test(data.error ?? ""), `HTTP ${res.status} — ${data.error}`);
+  }
+  // --- 6) Multi-provider, live ---
+  // Chrome's real mimeType is "audio/webm;codecs=opus" — the old allowlist
+  // rejected it outright ("could not be read"). It must now reach Gemini
+  // and come back as a key rejection, never a read failure.
+  {
+    const res = await fetch(`${BASE}/api/parse-ledger`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "voice", audio: wav, mimeType: "audio/webm;codecs=opus", apiKey: "AIzaFakeKeyForTest123" }),
+    });
+    const data = (await res.json()) as { ok?: boolean; error?: string };
+    check("Live voice with Chrome mimeType reaches Gemini (key rejection, not read failure)",
+      data.ok === false && /rejected/i.test(data.error ?? "") && !(data.error ?? "").includes("could not be read"), `HTTP ${res.status} — ${data.error}`);
+  }
+  // One bar, three providers: each fake key is rejected naming its provider.
+  // (If the sandbox cannot reach OpenAI/Claude at all, the friendly
+  // network message still names the provider — that is the check.)
+  for (const [label, key] of [["OpenAI", "sk-proj-fake123456"], ["Claude", "sk-ant-fake123456"]] as const) {
+    const res = await fetch(`${BASE}/api/parse-ledger`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ input: "took 200 from faizan", apiKey: key }),
+    });
+    const data = (await res.json()) as { ok?: boolean; error?: string; provider?: string };
+    check(`Live ${label} fake key => error names ${label}`, data.ok === false && new RegExp(label, "i").test(data.error ?? ""), `HTTP ${res.status} — ${data.error}`);
+  }
+  {
+    const res = await fetch(`${BASE}/api/parse-ledger`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ input: "took 200 from faizan", apiKey: "user-key" }),
+    });
+    const data = (await res.json()) as { ok?: boolean; error?: string };
+    check("Live unknown key => plain refusal, not a provider call", data.ok === false && /doesn't look like a Gemini, OpenAI, or Claude key/i.test(data.error ?? ""), `HTTP ${res.status} — ${data.error}`);
+  }
+  // Settings "Test" (ping): a fake Gemini key must fail with the friendly
+  // message AND a detail string carrying the provider's own error.
+  {
+    const res = await fetch(`${BASE}/api/parse-ledger`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "ping", apiKey: "AIzaFakeKeyForTest123" }),
+    });
+    const data = (await res.json()) as { ok?: boolean; error?: string; detail?: string };
+    check("Live ping with a fake Gemini key => friendly rejection + provider detail",
+      data.ok === false && /rejected/i.test(data.error ?? "") && (data.detail ?? "").length > 0, `HTTP ${res.status} — ${data.error} | detail: ${data.detail}`);
   }
 
   // --- 2) Secrets ---

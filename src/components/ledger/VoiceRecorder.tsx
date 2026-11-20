@@ -30,11 +30,13 @@ const MAX_RESTARTS = 5;
  * Two modes:
  *  - "speech": live Web Speech API (no key needed) - continuous +
  *    interim results, auto-restart, language fallback. Used when no
- *    Gemini key is available.
- *  - "gemini": record a voice note and hand the audio to Gemini, which
+ *    Gemini key is available, or when the key is OpenAI/Claude (those
+ *    providers have no audio input, so speech is transcribed live and
+ *    the transcript is parsed as text).
+ *  - "audio": record a voice note and hand the audio to Gemini, which
  *    transcribes + parses it itself - the path the hackathon statement
  *    describes, and the accurate one for Pashto/Urdu speech that the
- *    browser's speech recognition mangles. Used when a key is available.
+ *    browser's speech recognition mangles. Used only with a Gemini key.
  * Fixes over the first version, which stopped after the first pause
  * (continuous=false, interimResults=false) and showed nothing while
  * the user was speaking, and whose recording fallback was never
@@ -42,9 +44,9 @@ const MAX_RESTARTS = 5;
  */
 export function VoiceRecorder({ onTranscript, onAudio, mode = "speech", language = "en-PK", disabled = false }: {
   onTranscript?: (text: string) => void; onAudio?: (blob: Blob) => void;
-  mode?: "speech" | "gemini"; language?: string; disabled?: boolean;
+  mode?: "speech" | "audio"; language?: string; disabled?: boolean;
 }) {
-  const supported = mode === "gemini" ? true : getSpeechRecognition() !== null;
+  const supported = mode === "audio" ? true : getSpeechRecognition() !== null;
   const [listening, setListening] = useState(false);
   const [recording, setRecording] = useState(false);
   const [interim, setInterim] = useState("");
@@ -123,7 +125,7 @@ export function VoiceRecorder({ onTranscript, onAudio, mode = "speech", language
   function start() {
     if (!supported) return;
     setError(null);
-    if (mode === "gemini") { void startVoiceNote(); return; }
+    if (mode === "audio") { void startVoiceNote(); return; }
     setInterim("");
     finalRef.current = "";
     wantListening.current = true;
@@ -132,7 +134,7 @@ export function VoiceRecorder({ onTranscript, onAudio, mode = "speech", language
     startRecognition();
   }
 
-  /** Gemini mode: record the voice note; the audio goes to Gemini on stop. */
+  /** Audio mode: record the voice note; the audio goes to Gemini on stop. */
   async function startVoiceNote() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -172,7 +174,7 @@ export function VoiceRecorder({ onTranscript, onAudio, mode = "speech", language
         onClick={() => (active ? stop() : start())}
         className={`inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold ${active ? "bg-red-600 text-white" : "border border-stone-300 bg-white hover:bg-stone-50"} disabled:opacity-50`}>
         {active ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-        {listening ? "Listening… tap to stop" : recording ? "Recording voice note… tap to stop" : mode === "gemini" ? "Record voice note" : "Speak entry"}
+        {listening ? "Listening… tap to stop" : recording ? "Recording voice note… tap to stop" : mode === "audio" ? "Record voice note" : "Speak entry"}
       </button>
       {listening && interim ? <span className="max-w-64 text-xs italic text-stone-500" aria-live="polite">“{interim}”</span> : null}
       {recording ? <span className="max-w-56 text-xs text-stone-500">Gemini will transcribe and parse this voice note.</span> : null}

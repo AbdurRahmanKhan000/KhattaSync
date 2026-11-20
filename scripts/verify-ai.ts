@@ -4,14 +4,19 @@
  * (b) off-topic / chatbot prompts and prompt injection are blocked
  * (c) wrong Admin Vault passwords fail
  * (d) Abdurrehman unlocks, and toggling BYOK + model persists
- * No live Gemini call is made: the host key is empty in this repo, so a
+ * (e) multi-provider: one key bar, provider detected from the key
+ * (f) repair, don't reject: a wrong derived number is recomputed, not a failure
+ * (g) errors name the real cause (model-not-found, key rejected, bad JSON)
+ * (h) thinking config: Gemini 3 takes thinkingLevel, Gemini 2 a budget
+ * No live AI call is made: the host key is empty in this repo, so a
  * real model call would need a key the test must never contain.
  */
 import "fake-indexeddb/auto";
-import { LEDGER_RESPONSE_SCHEMA, getGeminiClient, resolveAiKey } from "../src/lib/ai/index.js";
+import { LEDGER_RESPONSE_SCHEMA, friendlyAiErrorMessage, getGeminiClient, isModelNotFoundError, resolveAiKey, sanitizeAiErrorDetail, thinkingConfigFor } from "../src/lib/ai/index.js";
+import { detectProvider, modelForProvider, providerSupportsVoiceAudio } from "../src/lib/ai/providers.js";
 import {
   DEFAULT_ADMIN_PASSWORD_HASH, containsPromptInjection, hashAdminPassword,
-  isLedgerQuery, isOffTopic, rejectedResult, validateParsedLedgerResult, verifyAdminPassword,
+  isLedgerQuery, isOffTopic, rejectedResult, repairParsedLedgerResult, validateParsedLedgerResult, verifyAdminPassword,
 } from "../src/lib/security/index.js";
 import { answerLedgerQuery } from "../src/lib/ledger-query.js";
 import { getAdminConfig, saveAdminConfig } from "../src/lib/db/index.js";
@@ -143,6 +148,83 @@ async function main(): Promise<void> {
     resolveAiKey({ hostKeyAllowed: true, serverKey: "host-key" }).mode === "host");
   // Restore defaults so the test leaves a clean local DB.
   await saveAdminConfig({ ...before, hostKeyWithdrawn: false, model: "gemini-3.8-flash" });
+
+  // (e) Multi-provider: one key bar, provider detected from the key itself.
+  check("(e) Gemini key detected", detectProvider("AIzaSyAbc123") === "gemini");
+  check("(e) OpenAI key detected", detectProvider("sk-proj-Abc123") === "openai");
+  check("(e) OpenAI legacy key detected", detectProvider("sk-Abc123") === "openai");
+  check("(e) Claude key detected", detectProvider("sk-ant-api03-Abc123") === "claude");
+  check("(e) Unknown key detected as nothing", detectProvider("user-key") === null);
+  check("(e) Empty key detected as nothing", detectProvider("") === null);
+  check("(e) Model for provider keeps a stored model of that provider",
+    modelForProvider("openai", "gpt-4o") === "gpt-4o");
+  check("(e) Model for provider falls back when the stored model belongs to another provider",
+    modelForProvider("openai", "gemini-3.8-flash") === "gpt-4o-mini");
+  check("(e) Model defaults per provider",
+    modelForProvider("gemini") === "gemini-3.8-flash" && modelForProvider("claude") === "claude-haiku-4-5");
+  check("(e) Only Gemini takes raw voice audio",
+    providerSupportsVoiceAudio("gemini") && !providerSupportsVoiceAudio("openai") && !providerSupportsVoiceAudio("claude"));
+  check("(e) BYOK Gemini key resolves with provider gemini",
+    resolveAiKey({ hostKeyAllowed: true, userApiKey: "AIzaSyAbc", serverKey: "host-key" }).provider === "gemini");
+  check("(e) BYOK Claude key resolves with provider claude",
+    resolveAiKey({ hostKeyAllowed: true, userApiKey: "sk-ant-Abc", serverKey: "host-key" }).provider === "claude");
+  check("(e) Unrecognised user key resolves with provider null",
+    resolveAiKey({ hostKeyAllowed: true, userApiKey: "user-key", serverKey: "host-key" }).provider === null);
+  check("(e) Host key resolves as Gemini",
+    resolveAiKey({ hostKeyAllowed: true, serverKey: "host-key" }).provider === "gemini");
+
+  // (f) Repair, don't reject: the live "AI parsing failed" cases. A model
+  // that gets a derived number wrong must not lose the whole entry.
+  const eggsEntry = { ...VALID_SALE, customer_name: "Faizan", items: [{ name: "eggs (one dozen)", quantity: 12, amount: 300 }], total_amount: 0, amount_paid: 300, credit_balance_change: 0 };
+  const eggsRepaired = repairParsedLedgerResult(eggsEntry);
+  check("(f) Eggs case repaired: item sum becomes the total, change 0",
+    eggsRepaired.ok && eggsRepaired.result?.total_amount === 300 && eggsRepaired.result?.credit_balance_change === 0);
+  const badPayment = { ...VALID_PAYMENT, total_amount: 0, credit_balance_change: 0 };
+  const paymentRepaired = repairParsedLedgerResult(badPayment);
+  check("(f) Payment repaired: total = paid, change = -paid",
+    paymentRepaired.ok && paymentRepaired.result?.total_amount === 2000 && paymentRepaired.result?.credit_balance_change === -2000);
+  const paidOverTotal = { ...VALID_SALE, items: [{ name: "flour", quantity: 1, amount: 200 }], total_amount: 200, amount_paid: 300, credit_balance_change: -100 };
+  const overRepaired = repairParsedLedgerResult(paidOverTotal);
+  check("(f) Paid more than total repaired: total = paid, change 0",
+    overRepaired.ok && overRepaired.result?.total_amount === 300 && overRepaired.result?.credit_balance_change === 0);
+  const wrongChange = { ...VALID_SALE, credit_balance_change: 999 };
+  const changeRepaired = repairParsedLedgerResult(wrongChange);
+  check("(f) Wrong credit change recomputed from total - paid",
+    changeRepaired.ok && changeRepaired.result?.credit_balance_change === 4500);
+  check("(f) Missing customer still rejected, not repaired",
+    !repairParsedLedgerResult({ ...VALID_SALE, customer_name: "" }).ok);
+  check("(f) Non-PKR still rejected, not repaired",
+    !repairParsedLedgerResult({ ...VALID_SALE, currency: "USD" }).ok);
+  check("(f) Bad action still rejected, not repaired",
+    !repairParsedLedgerResult({ ...VALID_SALE, action_type: "dance" }).ok);
+
+  // (g) Errors must say what actually happened — never a bare generic failure.
+  check("(g) 404 model-not-found names the model problem",
+    friendlyAiErrorMessage({ status: 404, message: "models/gemini-3.8-flash is not found for API version v1beta" }, "gemini").includes("not available"));
+  check("(g) 404 detected as model-not-found",
+    isModelNotFoundError({ status: 404, message: "The model `gpt-9` does not exist" }));
+  check("(g) 401 rejected key says the key was rejected",
+    friendlyAiErrorMessage({ status: 401, message: "API_KEY_INVALID" }, "openai").includes("was rejected"));
+  check("(g) 429 says busy, not failed",
+    friendlyAiErrorMessage({ status: 429, message: "Quota exceeded" }, "claude").includes("busy"));
+  check("(g) Non-JSON reply says so plainly",
+    friendlyAiErrorMessage(new Error("Gemini did not return valid JSON."), "gemini").includes("did not return valid JSON"));
+  check("(g) Validation detail passes through unchanged",
+    friendlyAiErrorMessage(new Error("AI output items do not add up to total_amount."), "gemini").includes("do not add up"));
+  check("(g) Error detail redacts keys",
+    !sanitizeAiErrorDetail(new Error("401: API key not valid. AIzaSyAbc123XYZ")).includes("AIzaSyAbc123XYZ"));
+  check("(g) Error detail keeps the provider's own words",
+    sanitizeAiErrorDetail(new Error("404: models/gemini-3.8-flash is not found")).includes("is not found"));
+
+  // (h) Thinking config: Gemini 3 takes thinkingLevel, Gemini 2 takes a budget.
+  const level3 = thinkingConfigFor("gemini-3.8-flash", "low").thinkingConfig as { thinkingLevel?: string };
+  check("(h) Gemini 3 low uses thinkingLevel",
+    level3?.thinkingLevel === "low");
+  check("(h) Gemini 3 standard sends no thinking config",
+    Object.keys(thinkingConfigFor("gemini-3.8-flash", "standard")).length === 0);
+  const budget2 = thinkingConfigFor("gemini-2.5-flash", "standard").thinkingConfig as { thinkingBudget?: number };
+  check("(h) Gemini 2 standard uses thinkingBudget 512",
+    budget2?.thinkingBudget === 512);
 
   // No key must never reach Gemini.
   let threw = false;

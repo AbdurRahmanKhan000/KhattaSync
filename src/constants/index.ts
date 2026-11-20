@@ -15,7 +15,7 @@ export const SYSTEM_LIMITS = {
 } as const;
 
 export const ERROR_MESSAGES = {
-  noApiKey: "Add your Gemini API key in Settings to use AI parsing.",
+  noApiKey: "Add your AI key (Gemini, OpenAI, or Claude) in Settings to use AI parsing.",
   offTopic: "KhattaSync only handles ledger entries — who, how much, gave or got.",
   injectionBlocked: "That input was blocked for safety. Please enter a normal ledger entry.",
   invalidAmount: "Amount must be a number greater than 0.",
@@ -23,8 +23,8 @@ export const ERROR_MESSAGES = {
   dbUnavailable: "Local storage (IndexedDB) is unavailable in this browser.",
   invalidBackup: "That file is not a valid KhattaSync backup.",
   ledgerOnly: "KhattaSync only processes shop sales, customer credit (udhaar), and payment records.",
-  noAiKey: "No AI key available. Enter your own Gemini API key in Settings to use AI parsing.",
-  hostKeyWithdrawn: "The host API key has been withdrawn by the Admin. Enter your own Gemini API key in Settings to continue.",
+  noAiKey: "No AI key available. Enter your own AI key (Gemini, OpenAI, or Claude) in Settings to use AI parsing.",
+  hostKeyWithdrawn: "The host API key has been withdrawn by the Admin. Enter your own AI key (Gemini, OpenAI, or Claude) in Settings to continue.",
   generic: "Something went wrong. Please try again.",
 } as const;
 
@@ -65,9 +65,13 @@ export const SAMPLE_SHOP_ENTRY_LOGS: EntryLog[] = [
 export const DEMO_CUSTOMERS: CustomerAccount[] = SAMPLE_SHOP_CUSTOMERS;
 export const DEMO_ENTRIES: LedgerEntry[] = SAMPLE_SHOP_TRANSACTIONS;
 
-export const AI_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash-lite"] as const;
+export const AI_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gpt-4o-mini", "gpt-4o", "claude-haiku-4-5", "claude-sonnet-5"] as const;
 export const DEFAULT_AI_MODEL = "gemini-3.8-flash" as const;
 export const AI_MODEL_LABELS: Record<string, string> = {
   "gemini-3.8-flash": "Gemini 3.8 Flash — fast (default)",
   "gemini-3.5-flash-lite": "Gemini 3.5 Flash-Lite — fastest / cheapest",
+  "gpt-4o-mini": "GPT-4o mini — fast (default)",
+  "gpt-4o": "GPT-4o — most capable OpenAI",
+  "claude-haiku-4-5": "Claude Haiku 4.5 — fast (default)",
+  "claude-sonnet-5": "Claude Sonnet 5 — balanced",
 };

@@ -1,9 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
-import type { AdminConfig, AiModel, ThinkingBudget } from "@/types";
-import { getAdminConfig, saveAdminConfig } from "@/lib/db";
+import type { AdminConfig, ThinkingBudget } from "@/types";
+import { getAdminConfig, getSettings, saveAdminConfig } from "@/lib/db";
 import { hashAdminPassword, verifyAdminPassword } from "@/lib/security";
 import { AI_MODEL_LABELS } from "@/constants";
+import { PROVIDER_LABELS, PROVIDER_MODELS, detectProvider, type AiProvider } from "@/lib/ai/providers";
+import { notifyDataChanged } from "@/components/layout/DashboardContext";
 import { Lock, ShieldCheck } from "lucide-react";
 
 export function AdminVault() {
@@ -14,9 +16,13 @@ export function AdminVault() {
   const [notice, setNotice] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  // The model list follows the provider of the key actually in use: the
+  // host key is Gemini; a personal key's provider is detected from the key.
+  const [activeProvider, setActiveProvider] = useState<AiProvider>("gemini");
 
   useEffect(() => {
     void getAdminConfig().then(setConfig);
+    void getSettings().then((s) => setActiveProvider(s.geminiApiKey ? detectProvider(s.geminiApiKey) ?? "gemini" : "gemini"));
   }, []);
 
   async function update(patch: Partial<AdminConfig>) {
@@ -25,6 +31,9 @@ export function AdminVault() {
     setConfig(next);
     await saveAdminConfig(next);
     setNotice("Admin setting saved in this browser.");
+    // Host-key withdrawal / model changes must reach the dashboard badge
+    // and the entry bar immediately, not on the next page refresh.
+    notifyDataChanged();
   }
 
   async function unlock(e: React.FormEvent) {
@@ -73,13 +82,14 @@ export function AdminVault() {
               <input type="checkbox" checked={config.hostKeyWithdrawn} onChange={(e) => void update({ hostKeyWithdrawn: e.target.checked })} />
               Withdraw host API key — enforce User BYOK Mode
             </label>
-            {config.hostKeyWithdrawn ? <p className="mt-1 text-sm text-red-700">Host key withdrawn. Users must enter their own Gemini key in Settings to run AI parsing.</p> : null}
+            {config.hostKeyWithdrawn ? <p className="mt-1 text-sm text-red-700">Host key withdrawn. Users must enter their own AI key (Gemini, OpenAI, or Claude) in Settings to run AI parsing.</p> : null}
           </div>
 
           <div>
             <h3 className="text-sm font-semibold">2. Model &amp; speed</h3>
+            <p className="mt-1 text-xs text-stone-500">Models for the provider in use: {PROVIDER_LABELS[activeProvider]}. Thinking budget applies to Gemini only.</p>
             <div className="mt-2 space-y-2">
-              {(["gemini-3.8-flash", "gemini-3.5-flash-lite"] as AiModel[]).map((m) => (
+              {PROVIDER_MODELS[activeProvider].map((m) => (
                 <label key={m} className="flex items-center gap-2 text-sm">
                   <input type="radio" name="ai-model" checked={config.model === m} onChange={() => void update({ model: m })} />
                   {AI_MODEL_LABELS[m]}

@@ -59,7 +59,10 @@ export interface UserSettings {
   ownerName: string;
   currency: "PKR";
   language: "en" | "ur";
-  /** User-supplied Gemini key, stored only in this browser (IndexedDB). */
+  /** User-supplied AI key, stored only in this browser (IndexedDB). One bar
+   * accepts a Gemini (AIza…), OpenAI (sk-… / sk-proj-…) or Claude (sk-ant-…)
+   * key; the provider is detected from the key itself. Field name kept as
+   * geminiApiKey so existing saved keys are not orphaned. */
   geminiApiKey?: string;
   demoDataLoaded: boolean;
 }
@@ -69,7 +72,14 @@ export type AppSettings = UserSettings & { id: string };
 
 /* ---- AI layer (Prompt 3) ---- */
 
-export type AiModel = "gemini-3.8-flash" | "gemini-3.5-flash-lite";
+/** Every model any provider may use. Per-provider lists live in src/lib/ai/providers.ts. */
+export type AiModel =
+  | "gemini-3.8-flash"
+  | "gemini-3.5-flash-lite"
+  | "gpt-4o-mini"
+  | "gpt-4o"
+  | "claude-haiku-4-5"
+  | "claude-sonnet-5";
 export type AiKeyMode = "host" | "personal" | "none";
 export type ThinkingBudget = "low" | "standard" | "high";
 export type LedgerActionType = "sale" | "purchase" | "payment" | "credit" | "inventory_note" | "reminder";

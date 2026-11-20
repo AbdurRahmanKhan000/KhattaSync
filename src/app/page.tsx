@@ -8,7 +8,7 @@ import { addEntry, addTransaction, createCustomer, listCustomers, logEntry, upda
 import type { LedgerEntry, ParsedLedgerResult } from "@/types";
 
 export default function DashboardPage() {
-  const { customers, transactions, loading, selectedCustomerId, apiMode, userApiKey, adminConfig, today, reload } = useDashboard();
+  const { customers, transactions, loading, selectedCustomerId, apiMode, apiProvider, userApiKey, adminConfig, today, reload } = useDashboard();
   const [toast, setToast] = useState<string | null>(null);
 
   const selectedCustomer = useMemo(
@@ -92,11 +92,11 @@ export default function DashboardPage() {
     <div>
       <Topbar title={selectedCustomer ? `${selectedCustomer.name} — Khata` : "Dashboard"} subtitle={selectedCustomer ? `Balance ${formatPKR(Math.abs(selectedCustomer.balance))} · ${selectedCustomer.balance > 0 ? "to collect" : selectedCustomer.balance < 0 ? "to pay" : "settled"}` : "Your digital khata — who owes what, at a glance."} />
       <div className="space-y-6 p-4 sm:p-6">
-        <KpiHeader totalUdhaar={totalUdhaar} collectedToday={collectedToday} activeCustomers={activeCustomers} apiMode={apiMode} loading={loading} />
+        <KpiHeader totalUdhaar={totalUdhaar} collectedToday={collectedToday} activeCustomers={activeCustomers} apiMode={apiMode} apiProvider={apiProvider} loading={loading} />
 
         <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5" aria-label="Quick record">
           <h2 className="text-sm font-semibold">Quick Record</h2>
-          <p className="mt-0.5 text-xs text-stone-500">Type or speak an entry — Gemini parses it into a structured ledger line.</p>
+          <p className="mt-0.5 text-xs text-stone-500">Type or speak an entry — your AI key parses it into a structured ledger line.</p>
           <div className="mt-3">
             <TransactionEntryBar
               onParsed={(r, raw, src) => void handleParsed(r, raw, src)}
