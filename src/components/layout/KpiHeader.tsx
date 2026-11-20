@@ -32,7 +32,13 @@ export function KpiHeader({ totalUdhaar, collectedToday, activeCustomers, apiMod
           <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">API Mode</p>
             <div className="mt-3"><ApiModeBadge mode={apiMode} provider={apiProvider} /></div>
-            <p className="mt-2 text-xs text-stone-500">AI parsing key in use right now{apiProvider ? ` · ${PROVIDER_LABELS[apiProvider]}` : ""}.</p>
+            <p className="mt-2 text-xs text-stone-500">
+              {apiMode === "none"
+                ? "No AI key — add one in Settings to use AI parsing."
+                : apiMode === "personal"
+                  ? `Your own key in use right now${apiProvider ? ` · ${PROVIDER_LABELS[apiProvider]}` : ""}.`
+                  : `Host key in use right now${apiProvider ? ` · ${PROVIDER_LABELS[apiProvider]}` : ""}.`}
+            </p>
           </div>
         </>
       )}
