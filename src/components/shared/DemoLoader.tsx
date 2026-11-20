@@ -1,15 +1,17 @@
 "use client";
-import { useState } from "react";
-import { loadSampleShopData } from "@/lib/db";
+import { useEffect, useState } from "react";
+import { getAdminConfig, loadSampleShopData } from "@/lib/db";
 
 export function DemoLoader() {
   const [status, setStatus] = useState<string | null>(null);
+  const [locked, setLocked] = useState(false);
+  useEffect(() => { void getAdminConfig().then((c) => setLocked(c.sampleDataLocked)); }, []);
   const [busy, setBusy] = useState(false);
   return (
     <div className="flex flex-wrap items-center gap-2">
       <button
         type="button"
-        disabled={busy}
+        disabled={busy || locked}
         onClick={async () => {
           setBusy(true);
           try {
@@ -21,7 +23,7 @@ export function DemoLoader() {
         }}
         className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-stone-50 disabled:opacity-50"
       >
-        {busy ? "Loading…" : "Load Sample Shop Data"}
+        {locked ? "Sample data locked by Admin" : busy ? "Loading…" : "Load Sample Shop Data"}
       </button>
       {status ? <span role="status" className="text-sm text-stone-600">{status}</span> : null}
     </div>

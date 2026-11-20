@@ -22,6 +22,9 @@ export const ERROR_MESSAGES = {
   missingCustomer: "Please include a customer name.",
   dbUnavailable: "Local storage (IndexedDB) is unavailable in this browser.",
   invalidBackup: "That file is not a valid KhattaSync backup.",
+  ledgerOnly: "KhattaSync only processes shop sales, customer credit (udhaar), and payment records.",
+  noAiKey: "No AI key available. Enter your own Gemini API key in Settings to use AI parsing.",
+  hostKeyWithdrawn: "The host API key has been withdrawn by the Admin. Enter your own Gemini API key in Settings to continue.",
   generic: "Something went wrong. Please try again.",
 } as const;
 
@@ -61,3 +64,10 @@ export const SAMPLE_SHOP_ENTRY_LOGS: EntryLog[] = [
 /** Backwards-compatible aliases used by the dashboard / demo loader. */
 export const DEMO_CUSTOMERS: CustomerAccount[] = SAMPLE_SHOP_CUSTOMERS;
 export const DEMO_ENTRIES: LedgerEntry[] = SAMPLE_SHOP_TRANSACTIONS;
+
+export const AI_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash-lite"] as const;
+export const DEFAULT_AI_MODEL = "gemini-3.8-flash" as const;
+export const AI_MODEL_LABELS: Record<string, string> = {
+  "gemini-3.8-flash": "Gemini 3.8 Flash — fast (default)",
+  "gemini-3.5-flash-lite": "Gemini 3.5 Flash-Lite — fastest / cheapest",
+};

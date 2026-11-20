@@ -11,5 +11,6 @@ export * from "./transactions";
 export * from "./entry-logs";
 export * from "./settings";
 export * from "./backup";
+export * from "./admin";
 export * from "./seed";
 export * from "./self-test";

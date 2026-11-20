@@ -1,5 +1,5 @@
 import { openDB, type IDBPDatabase } from "idb";
-import { DB_NAME, DB_VERSION, STORE_CUSTOMERS, STORE_ENTRY_LOGS, STORE_SETTINGS, STORE_TRANSACTIONS, type KhattaSyncDB } from "./schema";
+import { DB_NAME, DB_VERSION, STORE_ADMIN, STORE_CUSTOMERS, STORE_ENTRY_LOGS, STORE_SETTINGS, STORE_TRANSACTIONS, type KhattaSyncDB } from "./schema";
 
 export function isBrowser(): boolean {
   return typeof window !== "undefined";
@@ -31,6 +31,9 @@ export function openKhattaDB(name: string = DB_NAME): Promise<IDBPDatabase<Khatt
   if (cached) return cached;
   const p = openDB<KhattaSyncDB>(name, DB_VERSION, {
     upgrade(db) {
+      if (!db.objectStoreNames.contains(STORE_ADMIN)) {
+        db.createObjectStore(STORE_ADMIN, { keyPath: "id" });
+      }
       if (!db.objectStoreNames.contains(STORE_CUSTOMERS)) {
         const s = db.createObjectStore(STORE_CUSTOMERS, { keyPath: "id" });
         s.createIndex("by-name", "name");

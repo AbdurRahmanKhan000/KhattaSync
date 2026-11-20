@@ -5,7 +5,7 @@ shopkeepers and small merchants.
 
 ## Stack
 Next.js 16 (App Router) · TypeScript · Tailwind CSS 4 · `@google/genai` (official
-Google Gen AI SDK) · `lucide-react` · `idb` (IndexedDB) · Gemini `gemini-2.5-flash`
+Google Gen AI SDK) · `lucide-react` · `idb` (IndexedDB) · Gemini `gemini-3.8-flash`
 
 ## Quick start
 ```bash
@@ -54,3 +54,25 @@ npm run build
 - **Verify:** `npm run verify:db` (fake-indexeddb CRUD + balance + export/import),
   plus the in-app self-test on the Settings page.
   `npm run verify:db` runs `tsx scripts/verify-db.ts`.
+
+## AI + Admin (Prompt 3)
+- **Not a chatbot:** no chat UI. Gemini Structured Outputs (`responseMimeType: application/json`
+  + `responseJsonSchema`) + server-side validation. Only sales, purchases, payments,
+  udhaar, inventory notes, and reminder drafts (English / Urdu / Roman Urdu).
+  Off-topic or injection input is rejected before any model call with:
+  "KhattaSync only processes shop sales, customer credit (udhaar), and payment records."
+  Strict result shape: `action_type, customer_name, items[], total_amount, amount_paid,
+  credit_balance_change, currency, whatsapp_reminder_draft, is_valid_ledger_entry, rejection_reason`.
+- **Route:** `POST /api/parse-ledger` (`action: parse | reminder`). Legacy `/api/ai/parse-entry` delegates to it.
+- **Keys:** server `GEMINI_API_KEY` (.env, never sent to the browser) is the Host Hosted Key;
+  a key saved in Settings (IndexedDB) is the Personal User API Key (BYOK) and always wins;
+  if the Admin withdraws the host key, BYOK is enforced. Status badge in Settings shows Host / Personal / No key.
+- **Model:** default `gemini-3.8-flash`, switchable to `gemini-3.5-flash-lite` (Admin), thinking budget low/standard/high.
+  Note: only these two models are offered — gemini-2.5-flash was removed because Google
+  retires it on December 1, 2026 (requests are then routed to gemini-3.5-flash-lite).
+  A live Gemini call has not been verified here because no API key is configured —
+  add a key and test once before demoing.
+- **Admin Vault:** Settings → Admin Control Vault, password-protected (SHA-256 hash only, Web Crypto).
+  Unlocked Admin can: withdraw/restore the host key, switch model + thinking budget,
+  set max daily AI entries, toggle audio transcription, lock/unlock sample data, change the Admin password.
+- **Verify:** `npm run verify:ai` (27 checks), `npm run verify:db`, `npm run verify:all`.

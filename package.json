@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "verify:db": "tsx scripts/verify-db.ts"
+    "verify:db": "tsx scripts/verify-db.ts",
+    "verify:ai": "tsx scripts/verify-ai.ts",
+    "verify:all": "npm run verify:db && npm run verify:ai"
   },
   "dependencies": {
     "@google/genai": "^3.6.1",

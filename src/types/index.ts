@@ -65,10 +65,47 @@ export interface UserSettings {
 /** Stored in `app_settings` under id "app". */
 export type AppSettings = UserSettings & { id: string };
 
+/* ---- AI layer (Prompt 3) ---- */
+
+export type AiModel = "gemini-3.8-flash" | "gemini-3.5-flash-lite";
+export type AiKeyMode = "host" | "personal" | "none";
+export type ThinkingBudget = "low" | "standard" | "high";
+export type LedgerActionType = "sale" | "purchase" | "payment" | "credit" | "inventory_note" | "reminder";
+
+export interface LedgerItem {
+  name: string;
+  quantity?: number;
+  unitPrice?: number;
+  amount: number;
+}
+
+/** The ONLY shape Gemini may return, enforced by responseSchema AND server validation. */
+export interface ParsedLedgerResult {
+  action_type: LedgerActionType;
+  customer_name: string;
+  items: LedgerItem[];
+  total_amount: number;
+  amount_paid: number;
+  credit_balance_change: number;
+  currency: "PKR";
+  whatsapp_reminder_draft: string;
+  is_valid_ledger_entry: boolean;
+  rejection_reason: string;
+}
+
 export interface AdminConfig {
+  id: string;
   vaultEnabled: boolean;
   /** SHA-256 hex of the admin password. Plaintext is never stored. */
-  passwordHash?: string;
+  passwordHash: string;
+  /** Admin withdrew the server host key: AI may only run with the user's own key. */
+  hostKeyWithdrawn: boolean;
+  model: AiModel;
+  thinkingBudget: ThinkingBudget;
+  /** Max AI-parsed entries per browser session (per day, local). */
+  maxDailyEntries: number;
+  audioTranscriptionEnabled: boolean;
+  sampleDataLocked: boolean;
   lockedAt?: string;
 }
 

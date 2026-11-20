@@ -1,24 +1,130 @@
 "use client";
-import { useState } from "react";
-import { Lock } from "lucide-react";
+import { useEffect, useState } from "react";
+import type { AdminConfig, AiModel, ThinkingBudget } from "@/types";
+import { getAdminConfig, saveAdminConfig } from "@/lib/db";
+import { hashAdminPassword, verifyAdminPassword } from "@/lib/security";
+import { AI_MODEL_LABELS } from "@/constants";
+import { Lock, ShieldCheck } from "lucide-react";
 
 export function AdminVault() {
+  const [config, setConfig] = useState<AdminConfig | null>(null);
   const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const [unlocked, setUnlocked] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  useEffect(() => {
+    void getAdminConfig().then(setConfig);
+  }, []);
+
+  async function update(patch: Partial<AdminConfig>) {
+    if (!config) return;
+    const next = { ...config, ...patch };
+    setConfig(next);
+    await saveAdminConfig(next);
+    setNotice("Admin setting saved in this browser.");
+  }
+
+  async function unlock(e: React.FormEvent) {
+    e.preventDefault();
+    if (!config) return;
+    const ok = await verifyAdminPassword(password, config.passwordHash);
+    if (!ok) { setError("Wrong password. The vault stays locked."); return; }
+    setError(null);
+    setUnlocked(true);
+  }
+
+  async function changePassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (!config) return;
+    if (newPassword.length < 4) { setError("New password must be at least 4 characters."); return; }
+    if (newPassword !== confirmPassword) { setError("New passwords do not match."); return; }
+    const hash = await hashAdminPassword(newPassword);
+    await update({ passwordHash: hash });
+    setNewPassword("");
+    setConfirmPassword("");
+    setError(null);
+    setNotice("Admin password changed (stored as a hash only).");
+  }
+
+  if (!config) return <section className="rounded-2xl border border-stone-200 bg-white p-5"><p className="text-sm text-stone-500">Loading vault…</p></section>;
+
   return (
     <section className="rounded-2xl border border-stone-200 bg-white p-5">
-      <h2 className="flex items-center gap-2 font-semibold"><Lock className="h-4 w-4" /> Admin Vault</h2>
-      <p className="mt-1 text-sm text-stone-500">Password-protected admin area. The password is hashed — never stored in plain text.</p>
-      {unlocked ? (
-        <p className="mt-3 text-sm font-medium text-emerald-700">Vault unlocked. Admin controls will appear here.</p>
-      ) : (
-        <form className="mt-3 flex gap-2" onSubmit={(e) => { e.preventDefault(); setUnlocked(password.length >= 4); }}>
+      <h2 className="flex items-center gap-2 font-semibold"><Lock className="h-4 w-4" /> Admin Control Vault</h2>
+      <p className="mt-1 text-sm text-stone-500">Password-protected. Without the password, no control inside this vault can be viewed or changed.</p>
+
+      {!unlocked ? (
+        <form className="mt-3 flex gap-2" onSubmit={(e) => void unlock(e)}>
           <label htmlFor="vault-password" className="sr-only">Admin password</label>
-          <input id="vault-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Admin password" autoComplete="off"
+          <input id="vault-password" type="password" value={password} onChange={(e) => { setPassword(e.target.value); setError(null); }} placeholder="Admin password" autoComplete="off"
             className="min-w-0 flex-1 rounded-xl border border-stone-300 px-4 py-2.5 text-sm outline-none focus:border-emerald-600" />
           <button type="submit" className="rounded-xl bg-stone-900 px-4 py-2.5 text-sm font-semibold text-white">Unlock</button>
         </form>
+      ) : (
+        <div className="mt-4 space-y-5">
+          <p className="flex items-center gap-2 text-sm font-medium text-emerald-700"><ShieldCheck className="h-4 w-4" /> Vault unlocked — Admin controls active.</p>
+
+          <div>
+            <h3 className="text-sm font-semibold">1. Host API key</h3>
+            <label className="mt-2 flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={config.hostKeyWithdrawn} onChange={(e) => void update({ hostKeyWithdrawn: e.target.checked })} />
+              Withdraw host API key — enforce User BYOK Mode
+            </label>
+            {config.hostKeyWithdrawn ? <p className="mt-1 text-sm text-red-700">Host key withdrawn. Users must enter their own Gemini key in Settings to run AI parsing.</p> : null}
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold">2. Model &amp; speed</h3>
+            <div className="mt-2 space-y-2">
+              {(["gemini-3.8-flash", "gemini-3.5-flash-lite"] as AiModel[]).map((m) => (
+                <label key={m} className="flex items-center gap-2 text-sm">
+                  <input type="radio" name="ai-model" checked={config.model === m} onChange={() => void update({ model: m })} />
+                  {AI_MODEL_LABELS[m]}
+                </label>
+              ))}
+            </div>
+            <label className="mt-3 block text-sm">Thinking budget
+              <select value={config.thinkingBudget} onChange={(e) => void update({ thinkingBudget: e.target.value as ThinkingBudget })} className="ml-2 rounded-lg border px-2 py-1 text-sm">
+                <option value="low">Low — fastest</option>
+                <option value="standard">Standard</option>
+                <option value="high">High — most careful</option>
+              </select>
+            </label>
+            <p className="mt-1 text-xs text-stone-500">Current model: {config.model} · budget: {config.thinkingBudget}</p>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold">3. Strictness &amp; quota</h3>
+            <label className="mt-2 block text-sm">Max AI entries per browser session (per day)
+              <input type="number" min={1} max={5000} value={config.maxDailyEntries} onChange={(e) => void update({ maxDailyEntries: Math.max(1, Number(e.target.value) || 1) })} className="ml-2 w-24 rounded-lg border px-2 py-1 text-sm" />
+            </label>
+            <label className="mt-2 flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={config.audioTranscriptionEnabled} onChange={(e) => void update({ audioTranscriptionEnabled: e.target.checked })} />
+              Audio transcription support
+            </label>
+            <label className="mt-2 flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={config.sampleDataLocked} onChange={(e) => void update({ sampleDataLocked: e.target.checked })} />
+              Lock sample data presets (users cannot load demo data)
+            </label>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold">4. Change Admin password</h3>
+            <form className="mt-2 flex flex-wrap gap-2" onSubmit={(e) => void changePassword(e)}>
+              <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password" autoComplete="off" className="rounded-xl border border-stone-300 px-3 py-2 text-sm" />
+              <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirm new password" autoComplete="off" className="rounded-xl border border-stone-300 px-3 py-2 text-sm" />
+              <button type="submit" className="rounded-xl bg-stone-900 px-4 py-2 text-sm font-semibold text-white">Change password</button>
+            </form>
+          </div>
+
+          <button type="button" onClick={() => { setUnlocked(false); setPassword(""); setNotice(null); }} className="rounded-xl border px-4 py-2 text-sm font-medium">Lock vault</button>
+        </div>
       )}
+      {error ? <p role="alert" className="mt-3 text-sm text-red-700">{error}</p> : null}
+      {notice ? <p role="status" className="mt-3 text-sm text-emerald-700">{notice}</p> : null}
     </section>
   );
 }

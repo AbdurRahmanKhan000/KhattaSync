@@ -1,5 +1,5 @@
 import type { DBSchema } from "idb";
-import type { AppSettings, CustomerAccount, EntryLog, LedgerEntry } from "../../types";
+import type { AdminConfig, AppSettings, CustomerAccount, EntryLog, LedgerEntry } from "../../types";
 
 /**
  * 100% browser-isolated storage.
@@ -10,12 +10,13 @@ import type { AppSettings, CustomerAccount, EntryLog, LedgerEntry } from "../../
  * own empty database; they can never see each other's customers or entries.
  */
 export const DB_NAME = "khattasync_local_db";
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 
 export const STORE_CUSTOMERS = "customers";
 export const STORE_TRANSACTIONS = "transactions";
 export const STORE_ENTRY_LOGS = "entry_logs";
 export const STORE_SETTINGS = "app_settings";
+export const STORE_ADMIN = "admin_config";
 
 /** Backwards-compatible alias: transactions are ledger entries. */
 export const STORE_ENTRIES = STORE_TRANSACTIONS;
@@ -25,4 +26,5 @@ export interface KhattaSyncDB extends DBSchema {
   transactions: { key: string; value: LedgerEntry; indexes: { "by-customer": string; "by-date": string } };
   entry_logs: { key: string; value: EntryLog; indexes: { "by-date": string } };
   app_settings: { key: string; value: AppSettings };
+  admin_config: { key: string; value: AdminConfig };
 }
