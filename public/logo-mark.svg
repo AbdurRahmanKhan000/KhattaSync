@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="KhattaSync logo">
+  <!-- KhattaSync mark: an open ledger with a checkmark rising from its pages.
+       Deep emerald tile, warm paper-white book. Drawn as vector so it stays
+       crisp from favicon to cover page. -->
+  <rect x="4" y="4" width="504" height="504" rx="116" fill="#065f46"/>
+  <!-- Book cover (paper white) -->
+  <path d="M84 246 Q170 220 256 236 Q342 220 428 246 L428 408 Q342 382 256 398 Q170 382 84 408 Z" fill="#faf5ea"/>
+  <!-- Inner emerald frame -->
+  <path d="M96 254 Q172 232 256 246 Q340 232 416 254 L416 398 Q340 376 256 390 Q172 376 96 398 Z" fill="#065f46"/>
+  <!-- Pages -->
+  <path d="M108 262 Q178 242 250 254 L250 380 Q178 368 108 388 Z" fill="#faf5ea"/>
+  <path d="M404 262 Q334 242 262 254 L262 380 Q334 368 404 388 Z" fill="#faf5ea"/>
+  <!-- Ruled lines -->
+  <g stroke="#065f46" stroke-width="9" stroke-linecap="round" fill="none">
+    <path d="M132 282 Q182 270 230 278"/>
+    <path d="M132 304 Q182 292 230 300"/>
+    <path d="M132 326 Q182 314 230 322"/>
+    <path d="M132 348 Q182 336 230 344"/>
+    <path d="M282 278 Q330 270 380 282"/>
+    <path d="M282 300 Q330 292 380 304"/>
+    <path d="M282 322 Q330 314 380 326"/>
+    <path d="M282 344 Q330 336 380 348"/>
+  </g>
+  <!-- Spine stitching -->
+  <line x1="256" y1="252" x2="256" y2="384" stroke="#faf5ea" stroke-width="4" stroke-linecap="round" stroke-dasharray="1 12"/>
+  <!-- Checkmark rising from the pages -->
+  <path d="M172 176 L244 240 L348 94" stroke="#faf5ea" stroke-width="34" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

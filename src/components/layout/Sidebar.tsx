@@ -1,8 +1,9 @@
 "use client";
 import { useMemo, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, Bot, LayoutDashboard, Plus, Search, Settings, Users, X } from "lucide-react";
+import { Bot, LayoutDashboard, Plus, Search, Settings, Users, X } from "lucide-react";
 import { formatPKR } from "@/lib/utils";
 import { notifyDataChanged, useDashboard } from "./DashboardContext";
 import { createCustomer } from "@/lib/db";
@@ -11,7 +12,7 @@ import { useLanguage } from "@/lib/i18n/LanguageContext";
 import type { I18nKey } from "@/lib/i18n/strings";
 
 const NAV: { href: string; label: I18nKey; icon: typeof LayoutDashboard }[] = [
-  { href: "/", label: "navDashboard", icon: LayoutDashboard },
+  { href: "/app", label: "navDashboard", icon: LayoutDashboard },
   { href: "/agent", label: "navAgent", icon: Bot },
   { href: "/customers", label: "navCustomers", icon: Users },
   { href: "/settings", label: "navSettings", icon: Settings },
@@ -36,10 +37,10 @@ function SidebarContent() {
   return (
     <div className="flex h-full flex-col bg-white">
       <div className="flex items-center justify-between px-4 py-4">
-        <div className="flex items-center gap-2">
-          <BookOpen className="h-6 w-6 text-emerald-700" />
+        <Link href="/app" onClick={() => setSidebarOpen(false)} className="flex items-center gap-2">
+          <Image src="/logo-mark.svg" alt="KhattaSync logo" width={28} height={28} className="h-7 w-7 rounded-lg" />
           <span className="text-lg font-bold tracking-tight">KhattaSync</span>
-        </div>
+        </Link>
         <button type="button" aria-label={t("closeMenu")} onClick={() => setSidebarOpen(false)} className="rounded-lg p-1 hover:bg-stone-100 md:hidden">
           <X className="h-5 w-5" />
         </button>

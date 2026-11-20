@@ -9,6 +9,7 @@ const jetbrainsMono = JetBrains_Mono({ variable: "--font-jetbrains-mono", subset
 export const metadata: Metadata = {
   title: "KhattaSync — Digital Ledger for Shopkeepers",
   description: "AI-powered voice and text ledger (credit ledger) for neighbourhood shopkeepers and small merchants.",
+  icons: [{ rel: "icon", url: "/logo-mark.svg", type: "image/svg+xml" }],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

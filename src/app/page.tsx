@@ -1,115 +1,36 @@
 "use client";
-import { useMemo, useState } from "react";
-import { formatPKR } from "@/lib/utils";
-import { KpiHeader, Topbar, useDashboard } from "@/components/layout";
-import { LedgerTable, TransactionEntryBar } from "@/components/ledger";
-import { DemoLoader, Toast } from "@/components/shared";
-import { addEntry, updateTransaction } from "@/lib/db";
-import { saveParsedEntry } from "@/lib/ledger-save";
+import Image from "next/image";
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
+import { LanguageSelector } from "@/components/layout/LanguageSelector";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
-import type { LedgerEntry, ParsedLedgerResult } from "@/types";
 
-export default function DashboardPage() {
-  const { customers, transactions, loading, selectedCustomerId, apiMode, apiProvider, userApiKey, adminConfig, today, reload } = useDashboard();
+/**
+ * The cover page. Nothing else lives here on purpose: the logo, the
+ * name, one sentence in plain words, and the button into the app.
+ * It sits outside the app shell — no sidebar, no top bar.
+ */
+export default function CoverPage() {
   const { t } = useLanguage();
-  const [toast, setToast] = useState<string | null>(null);
-
-  const selectedCustomer = useMemo(
-    () => customers.find((c) => c.id === selectedCustomerId) ?? null,
-    [customers, selectedCustomerId],
-  );
-
-  const visibleTransactions = useMemo(
-    () => (selectedCustomerId ? transactions.filter((t) => t.customerId === selectedCustomerId) : transactions),
-    [transactions, selectedCustomerId],
-  );
-
-  const totalUdhaar = useMemo(() => customers.reduce((s, c) => s + Math.max(0, c.balance), 0), [customers]);
-  const collectedToday = useMemo(
-    () => (today ? transactions.filter((t) => t.type === "got" && t.date === today).reduce((s, t) => s + t.amount, 0) : 0),
-    [transactions, today],
-  );
-  const activeCustomers = useMemo(() => customers.filter((c) => c.balance !== 0).length, [customers]);
-
-  async function handleParsed(result: ParsedLedgerResult, rawInput: string, source: "text" | "voice") {
-    // One shared save path (see src/lib/ledger-save.ts) — the AI Agent
-    // page saves through the exact same code.
-    const saved = await saveParsedEntry(result, rawInput, source, { customers });
-    if (!saved) return;
-    await reload();
-    setToast(`Saved: ${saved.customerName} — ${formatPKR(saved.amount)}`);
-    window.setTimeout(() => setToast(null), 4000);
-  }
-
-  async function handleMarkPaid(entry: LedgerEntry) {
-    const now = new Date();
-    const stamp = now.toISOString();
-    // Quick-settle: post the matching payment, then mark the original paid.
-    const payment: LedgerEntry = {
-      id: `txn-${crypto.randomUUID()}`,
-      customerId: entry.customerId, customerName: entry.customerName,
-      type: "got", amount: entry.amount, status: "paid",
-      note: `Payment received — settles ${entry.date} entry`,
-      date: stamp.slice(0, 10), createdAt: stamp, updatedAt: stamp, source: "manual",
-    };
-    await addEntry(payment);
-    await updateTransaction({ ...entry, status: "paid" });
-    await reload();
-    setToast(`${entry.customerName} marked paid — ${formatPKR(entry.amount)} received.`);
-    window.setTimeout(() => setToast(null), 4000);
-  }
-
   return (
-    <div>
-      <Topbar title={selectedCustomer ? `${selectedCustomer.name} — ${t("tableTitle")}` : t("navDashboard")} subtitle={selectedCustomer ? `${t("balanceLabel")} ${formatPKR(Math.abs(selectedCustomer.balance))} · ${selectedCustomer.balance > 0 ? t("toCollect") : selectedCustomer.balance < 0 ? t("toPay") : t("settled")}` : t("dashboardSubtitle")} />
-      <div className="space-y-6 p-4 sm:p-6">
-        <KpiHeader totalUdhaar={totalUdhaar} collectedToday={collectedToday} activeCustomers={activeCustomers} apiMode={apiMode} apiProvider={apiProvider} loading={loading} />
+    <div className="relative flex min-h-screen flex-col bg-[#f8f7f4]">
+      <header className="flex justify-end p-4 sm:p-6">
+        <LanguageSelector />
+      </header>
 
-        <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5" aria-label="Quick record">
-          <h2 className="text-sm font-semibold">{t("quickRecord")}</h2>
-          <p className="mt-0.5 text-xs text-stone-500">{t("quickRecordHint")}</p>
-          <div className="mt-3">
-            <TransactionEntryBar
-              onParsed={(r, raw, src) => void handleParsed(r, raw, src)}
-              apiKey={userApiKey}
-              hostKeyAllowed={!(adminConfig?.hostKeyWithdrawn ?? false)}
-              model={adminConfig?.model}
-              thinkingBudget={adminConfig?.thinkingBudget}
-              audioEnabled={adminConfig?.audioTranscriptionEnabled ?? true}
-              apiMode={apiMode}
-              customers={customers}
-              transactions={transactions}
-              totalUdhaar={totalUdhaar}
-              collectedToday={collectedToday}
-            />
-          </div>
-        </section>
+      <main className="flex flex-1 flex-col items-center justify-center px-6 pb-16 text-center">
+        <div className="rounded-[2rem] shadow-xl shadow-emerald-900/20 ring-1 ring-emerald-900/10">
+          <Image src="/logo-mark.svg" alt="KhattaSync logo" width={160} height={160} priority className="h-36 w-36 rounded-[2rem] sm:h-40 sm:w-40" />
+        </div>
 
-        {toast ? <Toast message={toast} /> : null}
+        <h1 className="mt-8 text-5xl font-bold tracking-tight text-stone-900 sm:text-6xl">KhattaSync</h1>
 
-        {customers.length === 0 && !loading ? (
-          <section className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
-            <h2 className="font-semibold">{t("emptyLedgerTitle")}</h2>
-            <p className="mt-1 text-sm text-stone-500">{t("emptyLedgerHint")}</p>
-            <div className="mt-4"><DemoLoader /></div>
-          </section>
-        ) : null}
+        <p className="mt-4 max-w-md text-lg leading-relaxed text-stone-600">{t("coverTagline")}</p>
 
-        <section className="rounded-2xl border border-stone-200 bg-white shadow-sm" aria-label="Ledger">
-          <h2 className="border-b border-stone-200 px-4 py-4 font-semibold">
-            {selectedCustomer ? `${t("entriesWord")} — ${selectedCustomer.name}` : t("recentEntries")}
-          </h2>
-          <LedgerTable
-            entries={visibleTransactions}
-            loading={loading}
-            onMarkPaid={(e) => void handleMarkPaid(e)}
-            apiKey={userApiKey}
-            hostKeyAllowed={!(adminConfig?.hostKeyWithdrawn ?? false)}
-            model={adminConfig?.model}
-            apiMode={apiMode}
-          />
-        </section>
-      </div>
+        <Link href="/app" className="mt-10 inline-flex items-center gap-2 rounded-full bg-emerald-700 px-8 py-3.5 text-base font-semibold text-white shadow-md transition hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700">
+          {t("openApp")} <ArrowRight className="h-5 w-5" />
+        </Link>
+      </main>
     </div>
   );
 }

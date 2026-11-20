@@ -1,7 +1,7 @@
 import { Suspense, type ReactNode } from "react";
 import { cookies } from "next/headers";
 import { DEFAULT_LANGUAGE, LANGUAGE_COOKIE, isAppLanguage } from "@/lib/i18n/languages";
-import { AppShell } from "./AppShell";
+import { LanguageProvider } from "@/lib/i18n/LanguageContext";
 
 /**
  * The saved UI language, read from the cookie on the server so the first
@@ -12,17 +12,21 @@ import { AppShell } from "./AppShell";
  * static shell (English fallback) prerenders and the language-aware
  * shell streams in, so the build never tries to prerender a page with
  * request data it cannot have.
+ *
+ * This wraps the whole app — cover page and shell alike — so the
+ * cover's tagline and button speak the saved language too. The app
+ * shell (sidebar, top bar) lives one level down, in (shell)/layout.
  */
 async function LanguageShellInner({ children }: { children: ReactNode }) {
   const cookieStore = await cookies();
   const saved = cookieStore.get(LANGUAGE_COOKIE)?.value;
   const initialLang = isAppLanguage(saved) ? saved : DEFAULT_LANGUAGE;
-  return <AppShell initialLang={initialLang}>{children}</AppShell>;
+  return <LanguageProvider initialLang={initialLang}>{children}</LanguageProvider>;
 }
 
 export function LanguageShell({ children }: { children: ReactNode }) {
   return (
-    <Suspense fallback={<AppShell initialLang={DEFAULT_LANGUAGE}>{children}</AppShell>}>
+    <Suspense fallback={<LanguageProvider initialLang={DEFAULT_LANGUAGE}>{children}</LanguageProvider>}>
       <LanguageShellInner>{children}</LanguageShellInner>
     </Suspense>
   );

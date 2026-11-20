@@ -204,7 +204,7 @@ export function AgentChat({ onParsed, apiKey, hostKeyAllowed, model, thinkingBud
         </div>
       </form>
       {!audioEnabled ? <p className="text-xs text-stone-500">{t("voiceDisabled")}</p> : null}
-      <p className="text-xs text-stone-400">{t("agentOnlyLedger")} <Link href="/" className="text-emerald-700 underline">{t("backToDashboard")}</Link></p>
+      <p className="text-xs text-stone-400">{t("agentOnlyLedger")} <Link href="/app" className="text-emerald-700 underline">{t("backToDashboard")}</Link></p>
     </div>
   );
 }
