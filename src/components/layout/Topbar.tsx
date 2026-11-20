@@ -1,6 +1,7 @@
 "use client";
 import { Menu } from "lucide-react";
 import { useDashboard } from "./DashboardContext";
+import { LanguageSelector } from "./LanguageSelector";
 
 export function Topbar({ title, subtitle }: { title: string; subtitle?: string }) {
   const { setSidebarOpen } = useDashboard();
@@ -9,10 +10,11 @@ export function Topbar({ title, subtitle }: { title: string; subtitle?: string }
       <button type="button" aria-label="Open customer ledgers" onClick={() => setSidebarOpen(true)} className="rounded-lg p-2 hover:bg-stone-100 md:hidden">
         <Menu className="h-5 w-5" />
       </button>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <h1 className="truncate text-xl font-bold tracking-tight">{title}</h1>
         {subtitle ? <p className="truncate text-sm text-stone-500">{subtitle}</p> : null}
       </div>
+      <LanguageSelector />
     </header>
   );
 }

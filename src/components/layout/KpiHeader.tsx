@@ -2,14 +2,16 @@ import { formatPKR } from "@/lib/utils";
 import type { AiKeyMode } from "@/types";
 import { PROVIDER_LABELS, type AiProvider } from "@/lib/ai/providers";
 import { ApiModeBadge } from "./ApiModeBadge";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 export function KpiHeader({ totalUdhaar, collectedToday, activeCustomers, apiMode, apiProvider, loading }: {
   totalUdhaar: number; collectedToday: number; activeCustomers: number; apiMode: AiKeyMode; apiProvider?: AiProvider; loading: boolean;
 }) {
+  const { t } = useLanguage();
   const cards = [
-    { label: "Total Udhaar", sub: "Total outstanding credit", value: formatPKR(totalUdhaar) },
-    { label: "Collected Today", sub: "Cash received today", value: formatPKR(collectedToday) },
-    { label: "Active Customers", sub: "Customers with a balance", value: String(activeCustomers) },
+    { label: t("totalCredit"), sub: t("totalOutstandingCredit"), value: formatPKR(totalUdhaar) },
+    { label: t("collectedToday"), sub: t("cashReceivedToday"), value: formatPKR(collectedToday) },
+    { label: t("activeCustomers"), sub: t("customersWithBalance"), value: String(activeCustomers) },
   ];
   return (
     <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="Key totals">
@@ -30,14 +32,14 @@ export function KpiHeader({ totalUdhaar, collectedToday, activeCustomers, apiMod
             </div>
           ))}
           <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">API Mode</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">{t("apiMode")}</p>
             <div className="mt-3"><ApiModeBadge mode={apiMode} provider={apiProvider} /></div>
             <p className="mt-2 text-xs text-stone-500">
               {apiMode === "none"
-                ? "No AI key — add one in Settings to use AI parsing."
+                ? t("noAiKeyAdd")
                 : apiMode === "personal"
-                  ? `Your own key in use right now${apiProvider ? ` · ${PROVIDER_LABELS[apiProvider]}` : ""}.`
-                  : `Host key in use right now${apiProvider ? ` · ${PROVIDER_LABELS[apiProvider]}` : ""}.`}
+                  ? `${t("yourKeyInUse")}${apiProvider ? ` · ${PROVIDER_LABELS[apiProvider]}` : ""}.`
+                  : `${t("hostKeyInUse")}${apiProvider ? ` · ${PROVIDER_LABELS[apiProvider]}` : ""}.`}
             </p>
           </div>
         </>

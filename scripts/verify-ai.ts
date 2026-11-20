@@ -12,9 +12,14 @@
  *     are kept apart — a failure never again echoes the generic line as
  *     its own "Provider said:" detail
  * (j) default Gemini model is the lightweight gemini-3.5-flash-lite
- * (k) the AI Agent: prompt carries the live snapshot, replies parse into
- *     answer / clarify / save_entry, and an un-saveable entry becomes a
- *     question instead of a failure
+ * (k) the AI Agent v2: prompt carries the live snapshot WITH recent
+ *     entries and a reply-language line; replies parse into a PLAN of
+ *     actions (create_customer / save_entry / settle_balance); any
+ *     invalid action makes the whole plan a question instead of a
+ *     partial execution; legacy v1 replies still convert
+ * (l) thinking levels: Gemini 3 "minimal" is the fastest level
+ * (m) i18n: every key exists in every language, RTL flags are right,
+ *     and a missing string falls back to English
  * No live AI call is made: the host key is empty in this repo, so a
  * real model call would need a key the test must never contain.
  */
@@ -260,31 +265,101 @@ async function main(): Promise<void> {
   check("(j) Lite is first in the Gemini model list",
     modelForProvider("gemini", undefined) === "gemini-3.5-flash-lite");
 
-  // (k) The AI Agent: prompt carries the live snapshot; replies parse.
-  const snapshot = { customers: [{ name: "Bibi Zainab", balance: 3200 }], totalUdhaar: 3200, collectedToday: 200, totalCustomers: 1 };
+  // (k) The AI Agent v2: a plan of actions, atomic on failure.
+  const snapshot = { customers: [{ name: "Bibi Zainab", balance: 3200, recent: [{ date: "2026-11-20", type: "gave" as const, amount: 300 }] }], totalUdhaar: 3200, collectedToday: 200, totalCustomers: 1 };
   const prompt = buildAgentPrompt("What does Bibi Zainab owe?", [], snapshot);
   check("(k) Agent prompt carries the snapshot balances",
     prompt.includes("Bibi Zainab") && prompt.includes("3200"));
-  const agentSave = parseAgentReply(JSON.stringify({
+  check("(k) Agent prompt carries recent entries",
+    prompt.includes("credit_given") && prompt.includes("300"));
+  const promptUr = buildAgentPrompt("What does Bibi Zainab owe?", [], snapshot, "ur");
+  check("(k) Agent prompt names the reply language",
+    promptUr.includes("REPLY LANGUAGE: Urdu"));
+  const saleEntry = { ...VALID_SALE, customer_name: "Bibi Zainab", total_amount: 300, amount_paid: 0, credit_balance_change: 300, items: [{ name: "udhaar", quantity: 1, amount: 300 }] };
+  const agentPlan = parseAgentReply(JSON.stringify({
+    reply: "Done — Bibi Zainab took Rs 300 on credit.\nHer balance is now Rs 3,500 to collect.",
+    intent: "act",
+    actions: [{ type: "save_entry", entry: saleEntry }],
+  }));
+  check("(k) Agent act parses into a one-action plan",
+    agentPlan.intent === "act" && agentPlan.actions.length === 1 && agentPlan.actions[0].type === "save_entry");
+  const agentMulti = parseAgentReply(JSON.stringify({
+    reply: "Done — Bilal is added, and his first entry is saved.",
+    intent: "act",
+    actions: [
+      { type: "create_customer", customer_name: "Bilal" },
+      { type: "save_entry", entry: { ...VALID_SALE, customer_name: "Bilal", total_amount: 500, amount_paid: 0, credit_balance_change: 500, items: [{ name: "flour", quantity: 1, amount: 500 }] } },
+    ],
+  }));
+  check("(k) Agent multi-action plan keeps create before save, in order",
+    agentMulti.intent === "act" && agentMulti.actions.length === 2 && agentMulti.actions[0].type === "create_customer" && agentMulti.actions[1].type === "save_entry");
+  const agentSettle = parseAgentReply(JSON.stringify({
+    reply: "Done — Faizan's balance is settled.",
+    intent: "act",
+    actions: [{ type: "settle_balance", customer_name: "Faizan" }],
+  }));
+  check("(k) Agent settle parses with no amount (full balance)",
+    agentSettle.intent === "act" && agentSettle.actions[0].type === "settle_balance");
+  const agentAnswer = parseAgentReply(JSON.stringify({
+    reply: "Bibi Zainab owes Rs 3,200.\nHer last entry was Rs 300 on credit, on 2026-11-20.\nTotal credit in the shop is Rs 3,200.",
+    intent: "answer", actions: [],
+  }));
+  check("(k) Agent answer parses with no actions",
+    agentAnswer.intent === "answer" && agentAnswer.actions.length === 0);
+  const agentBadPlan = parseAgentReply(JSON.stringify({
+    reply: "Done.",
+    intent: "act",
+    actions: [
+      { type: "create_customer", customer_name: "Bilal" },
+      { type: "save_entry", entry: { ...VALID_SALE, customer_name: "", total_amount: 300 } },
+    ],
+  }));
+  check("(k) One invalid action makes the WHOLE plan a question — nothing executes",
+    agentBadPlan.intent === "clarify" && agentBadPlan.actions.length === 0 && /Who is this for/.test(agentBadPlan.reply));
+  const agentLegacy = parseAgentReply(JSON.stringify({
     reply: "Saved: Zainab took Rs 300 on credit.",
     intent: "save_entry",
-    entry: { ...VALID_SALE, customer_name: "Bibi Zainab", total_amount: 300, amount_paid: 0, credit_balance_change: 300, items: [{ name: "udhaar", quantity: 1, amount: 300 }] },
+    entry: saleEntry,
   }));
-  check("(k) Agent save_entry parses and repairs into a saveable entry",
-    agentSave.intent === "save_entry" && agentSave.entry?.total_amount === 300);
-  const agentClarify = parseAgentReply(JSON.stringify({ reply: "One question first:", intent: "clarify", entry: null }));
-  check("(k) Agent clarify parses with no entry",
-    agentClarify.intent === "clarify" && agentClarify.entry === null);
-  const agentBadEntry = parseAgentReply(JSON.stringify({
-    reply: "Got it.",
-    intent: "save_entry",
-    entry: { ...VALID_SALE, customer_name: "", total_amount: 300 },
-  }));
-  check("(k) Agent un-saveable entry becomes a question, not a failure",
-    agentBadEntry.intent === "clarify" && agentBadEntry.entry === null && /Who is this for/.test(agentBadEntry.reply));
+  check("(k) Legacy v1 save_entry converts to a one-action plan",
+    agentLegacy.intent === "act" && agentLegacy.actions.length === 1 && agentLegacy.actions[0].type === "save_entry");
+  const agentEmptyAct = parseAgentReply(JSON.stringify({ reply: "Done.", intent: "act", actions: [] }));
+  check("(k) Act with zero actions degrades to clarify",
+    agentEmptyAct.intent === "clarify" && agentEmptyAct.actions.length === 0);
   check("(k) Agent reply schema requires reply + intent",
     (AGENT_REPLY_SCHEMA.required as readonly string[]).includes("reply") &&
     (AGENT_REPLY_SCHEMA.required as readonly string[]).includes("intent"));
+
+  // (l) Thinking levels: minimal is the fastest Gemini 3 level.
+  const minimal3 = thinkingConfigFor("gemini-3.5-flash-lite", "minimal").thinkingConfig as { thinkingLevel?: string };
+  check("(l) Gemini 3 minimal uses thinkingLevel minimal",
+    minimal3?.thinkingLevel === "minimal");
+  const low3 = thinkingConfigFor("gemini-3.5-flash-lite", "low").thinkingConfig as { thinkingLevel?: string };
+  check("(l) Gemini 3 low uses thinkingLevel low",
+    low3?.thinkingLevel === "low");
+
+  // (m) i18n: every key in every language, RTL flags, English fallback.
+  const { I18N_KEYS, STRINGS, translate } = await import("../src/lib/i18n/strings.js");
+  const { LANGUAGES } = await import("../src/lib/i18n/languages.js");
+  const missing: string[] = [];
+  for (const lang of LANGUAGES) {
+    for (const key of I18N_KEYS) {
+      if (!STRINGS[lang.code]?.[key]) missing.push(`${lang.code}:${key}`);
+    }
+  }
+  check("(m) Every UI key exists in every language", missing.length === 0, missing.slice(0, 5).join(", "));
+  check("(m) Urdu, Pashto, Punjabi, Sindhi, Arabic are RTL; English, Hindi are LTR",
+    LANGUAGES.find((l) => l.code === "ur")?.rtl === true &&
+    LANGUAGES.find((l) => l.code === "ps")?.rtl === true &&
+    LANGUAGES.find((l) => l.code === "pa")?.rtl === true &&
+    LANGUAGES.find((l) => l.code === "sd")?.rtl === true &&
+    LANGUAGES.find((l) => l.code === "ar")?.rtl === true &&
+    LANGUAGES.find((l) => l.code === "en")?.rtl === false &&
+    LANGUAGES.find((l) => l.code === "hi")?.rtl === false);
+  check("(m) Seven languages in the selector", LANGUAGES.length === 7);
+  check("(m) Missing translation falls back to English, never blank",
+    translate("ur", "navDashboard") === "ڈیش بورڈ" && translate("ps", "totalCredit").length > 0);
+  check("(m) English is the default language", LANGUAGES[0].code === "en");
 
   // (h) Thinking config: Gemini 3 takes thinkingLevel, Gemini 2 takes a budget.
   const level3 = thinkingConfigFor("gemini-3.8-flash", "low").thinkingConfig as { thinkingLevel?: string };

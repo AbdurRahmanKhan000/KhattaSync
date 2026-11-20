@@ -20,18 +20,25 @@ export const GEMINI_MODEL: AiModel = DEFAULT_AI_MODEL;
 export const ALLOWED_MODELS: AiModel[] = ["gemini-3.5-flash-lite", "gemini-3.8-flash"];
 
 export const THINKING_BUDGETS: Record<ThinkingBudget, number> = {
+  minimal: 0,
   low: 0,
   standard: 512,
   high: 2048,
 };
 
 /**
- * Gemini 3 models take thinkingLevel ("low"/"high"), not thinkingBudget —
- * sending a budget to a 3.x model can make the whole call fail with a 400.
- * Gemini 2.x models take thinkingBudget. Standard = default (omit it).
+ * Gemini 3 models take thinkingLevel ("minimal"/"low"/"high"), not
+ * thinkingBudget — sending a budget to a 3.x model can make the whole
+ * call fail with a 400. Gemini 2.x models take thinkingBudget.
+ * Standard = default (omit it). "minimal" is the fastest level the API
+ * offers — the model answers with almost no reasoning step, which is
+ * exactly right for this app's narrow extraction jobs (name, items,
+ * amounts); the server still recomputes every derived amount, so a
+ * short reasoning step cannot corrupt a balance.
  */
 export function thinkingConfigFor(model: string, budget: ThinkingBudget): Record<string, unknown> {
   if (/^gemini-3/.test(model)) {
+    if (budget === "minimal") return { thinkingConfig: { thinkingLevel: "minimal" } };
     if (budget === "low") return { thinkingConfig: { thinkingLevel: "low" } };
     if (budget === "high") return { thinkingConfig: { thinkingLevel: "high" } };
     return {};
@@ -319,10 +326,10 @@ export async function generateReminderDraft(
 ): Promise<string> {
   const provider = opts.provider ?? "gemini";
   const { result } = await parseLedgerWithProvider(
-    `Remind ${customerName} to pay ${balance} PKR udhaar. Language: ${language}.`,
+    `Remind ${customerName} to pay ${balance} PKR on credit. Language: ${language}.`,
     { apiKey: opts.apiKey, provider, model: opts.model, thinkingBudget: opts.thinkingBudget },
   );
-  return result.whatsapp_reminder_draft || `Assalam-o-Alaikum ${customerName}, aap ka ${balance} PKR udhaar baqi hai. — KhattaSync`;
+  return result.whatsapp_reminder_draft || `Assalam-o-Alaikum ${customerName}, your balance of ${balance} PKR is still pending. Please pay at your convenience. — KhattaSync`;
 }
 
 /** Legacy wrapper (Prompt 1 route) — maps the strict result to the old ParsedLedgerInput shape. */

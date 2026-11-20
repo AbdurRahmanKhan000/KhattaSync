@@ -34,23 +34,23 @@ export function answerLedgerQuery(input: string, ctx: LedgerQueryContext): strin
   // Whole-ledger totals.
   if (/(total|kul).*(udhaar|credit|due|lena)/.test(lower) || lower.includes("total udhaar")) {
     const n = ctx.customers.filter((c) => c.balance > 0).length;
-    return `Total udhaar: ${formatPKR(ctx.totalUdhaar)} across ${n} customer${n === 1 ? " who still owes" : "s who still owe"}.`;
+    return `Total credit: ${formatPKR(ctx.totalUdhaar)} across ${n} customer${n === 1 ? " who still owes" : "s who still owe"}.`;
   }
   if (/collected today|aaj.*(collect|jama|mila)/.test(lower)) {
     return `Collected today: ${formatPKR(ctx.collectedToday)}.`;
   }
   if (/how many customers|kitne.*customer/.test(lower)) {
-    return `${ctx.customers.length} customers in this khata.`;
+    return `${ctx.customers.length} customers in this ledger.`;
   }
   if (/who owes/.test(lower)) {
     const owing = [...ctx.customers].filter((c) => c.balance > 0).sort((a, b) => b.balance - a.balance);
     if (owing.length === 0) return "Nobody owes anything right now — all settled.";
-    return `Most owed by ${owing[0].name}: ${formatPKR(owing[0].balance)} of ${formatPKR(ctx.totalUdhaar)} total udhaar.`;
+    return `Most owed by ${owing[0].name}: ${formatPKR(owing[0].balance)} of ${formatPKR(ctx.totalUdhaar)} total credit.`;
   }
 
   // A balance question with no matching customer: say so helpfully.
   if (/(credit|udhaar|balance|owe|baqi|baki|dena|lena|total)/.test(lower)) {
-    return "I couldn't find that customer in this browser's khata — check the spelling, or add them with the + New Customer button.";
+    return "I couldn't find that customer in this browser's ledger — check the spelling, or add them with the + New Customer button.";
   }
   return null;
 }

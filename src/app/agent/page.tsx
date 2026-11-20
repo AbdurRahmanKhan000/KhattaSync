@@ -5,16 +5,20 @@ import { Topbar, useDashboard } from "@/components/layout";
 import { AgentChat } from "@/components/ledger";
 import { Toast } from "@/components/shared";
 import { saveParsedEntry } from "@/lib/ledger-save";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 import type { ParsedLedgerResult } from "@/types";
 
 /**
- * AI Agent page — a real conversation with the khata. The shopkeeper
- * types or speaks; Gemini answers from the live ledger snapshot, asks one
- * short question when something is missing, and saves the entry the
- * moment it is complete (through the same save code as Quick Record).
+ * AI Agent page — a real agentic conversation with the ledger. The
+ * shopkeeper types or speaks; Gemini answers in full from the live
+ * ledger snapshot, asks one short question when something is missing,
+ * and returns a plan of actions that AgentChat executes in order
+ * (add a customer, save an entry, settle a balance). Voice notes still
+ * save through the same save code as Quick Record.
  */
 export default function AgentPage() {
   const { customers, transactions, loading, apiMode, apiProvider, userApiKey, adminConfig, today, reload } = useDashboard();
+  const { t } = useLanguage();
   const [toast, setToast] = useState<string | null>(null);
 
   const totalUdhaar = useMemo(() => customers.reduce((s, c) => s + Math.max(0, c.balance), 0), [customers]);
@@ -27,16 +31,16 @@ export default function AgentPage() {
     const saved = await saveParsedEntry(result, rawInput, source, { customers });
     if (!saved) return;
     await reload();
-    setToast(`Saved: ${saved.customerName} — ${formatPKR(saved.amount)}`);
+    setToast(`${t("savedLabel")}: ${saved.customerName} — ${formatPKR(saved.amount)}`);
     window.setTimeout(() => setToast(null), 4000);
   }
 
   return (
     <div>
-      <Topbar title="AI Agent" subtitle="Ask anything about your khata — or just say what happened. Gemini answers, asks, and saves." />
+      <Topbar title={t("navAgent")} subtitle={t("agentSubtitle")} />
       <div className="space-y-6 p-4 sm:p-6">
         {loading ? (
-          <div className="space-y-2" aria-label="Loading khata">
+          <div className="space-y-2" aria-label="Loading ledger">
             <div className="h-40 animate-pulse rounded-2xl bg-stone-200" />
             <div className="h-12 animate-pulse rounded-2xl bg-stone-200" />
           </div>
@@ -51,6 +55,7 @@ export default function AgentPage() {
             apiMode={apiMode}
             apiProvider={apiProvider}
             customers={customers}
+            transactions={transactions}
             totalUdhaar={totalUdhaar}
             collectedToday={collectedToday}
           />

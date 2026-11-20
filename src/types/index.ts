@@ -81,7 +81,7 @@ export type AiModel =
   | "claude-haiku-4-5"
   | "claude-sonnet-5";
 export type AiKeyMode = "host" | "personal" | "none";
-export type ThinkingBudget = "low" | "standard" | "high";
+export type ThinkingBudget = "minimal" | "low" | "standard" | "high";
 export type LedgerActionType = "sale" | "purchase" | "payment" | "credit" | "inventory_note" | "reminder";
 
 export interface LedgerItem {

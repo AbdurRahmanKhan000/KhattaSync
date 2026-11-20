@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import type { AiKeyMode, EntryStatus, LedgerEntry } from "@/types";
 import { formatPKR } from "@/lib/utils";
 import { StatusBadge } from "@/components/layout";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 import { WhatsAppReminderModal } from "./WhatsAppReminderModal";
 
 function timeOf(e: LedgerEntry): string {
@@ -15,6 +16,7 @@ export function LedgerTable({ entries, onMarkPaid, loading = false, apiKey, host
   loading?: boolean;
   apiKey?: string; hostKeyAllowed?: boolean; model?: string; apiMode?: AiKeyMode;
 }) {
+  const { t } = useLanguage();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | EntryStatus>("all");
 
@@ -38,29 +40,29 @@ export function LedgerTable({ entries, onMarkPaid, loading = false, apiKey, host
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2 border-b border-stone-200 px-4 py-3">
-        <label className="sr-only" htmlFor="ledger-search">Filter entries</label>
-        <input id="ledger-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter by customer, item or note…"
+        <label className="sr-only" htmlFor="ledger-search">{t("filterEntries")}</label>
+        <input id="ledger-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("searchEntries")}
           className="min-w-40 flex-1 rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-emerald-600" />
-        <label className="sr-only" htmlFor="ledger-status">Filter by status</label>
+        <label className="sr-only" htmlFor="ledger-status">{t("filterByStatus")}</label>
         <select id="ledger-status" value={status} onChange={(e) => setStatus(e.target.value as "all" | EntryStatus)} className="rounded-lg border border-stone-300 px-2 py-2 text-sm">
-          <option value="all">All statuses</option>
-          <option value="credit">Credit</option>
-          <option value="paid">Paid</option>
-          <option value="due">Due</option>
-          <option value="partial">Partial</option>
+          <option value="all">{t("allStatuses")}</option>
+          <option value="credit">{t("credit")}</option>
+          <option value="paid">{t("paid")}</option>
+          <option value="due">{t("due")}</option>
+          <option value="partial">{t("partial")}</option>
         </select>
-        <span className="text-xs text-stone-500">{filtered.length} of {entries.length} entries</span>
+        <span className="text-xs text-stone-500">{t("entriesCount").replace("{a}", String(filtered.length)).replace("{b}", String(entries.length))}</span>
       </div>
       {filtered.length === 0 ? (
-        <p className="p-6 text-sm text-stone-500">No entries match. Add your first entry above, or load the sample shop.</p>
+        <p className="p-6 text-sm text-stone-500">{t("noEntriesMatch")}</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-left text-sm">
             <thead>
               <tr className="border-b border-stone-200 text-xs uppercase tracking-wide text-stone-500">
-                <th className="px-4 py-3">Date · Time</th><th className="px-4 py-3">Customer</th><th className="px-4 py-3">Items</th>
-                <th className="px-4 py-3 text-right">Total</th><th className="px-4 py-3 text-right">Paid</th><th className="px-4 py-3 text-right">Credit</th>
-                <th className="px-4 py-3">Status</th><th className="px-4 py-3">Actions</th>
+                <th className="px-4 py-3">{t("dateTime")}</th><th className="px-4 py-3">{t("thCustomer")}</th><th className="px-4 py-3">{t("thItems")}</th>
+                <th className="px-4 py-3 text-right">{t("totalCol")}</th><th className="px-4 py-3 text-right">{t("paidCol")}</th><th className="px-4 py-3 text-right">{t("creditCol")}</th>
+                <th className="px-4 py-3">{t("thStatus")}</th><th className="px-4 py-3">{t("actionsCol")}</th>
               </tr>
             </thead>
             <tbody>
@@ -84,7 +86,7 @@ export function LedgerTable({ entries, onMarkPaid, loading = false, apiKey, host
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-2">
                         {(e.status === "credit" || e.status === "due" || e.status === "partial") && onMarkPaid ? (
-                          <button type="button" onClick={() => onMarkPaid(e)} className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-800">Mark Paid</button>
+                          <button type="button" onClick={() => onMarkPaid(e)} className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-800">{t("markPaid")}</button>
                         ) : null}
                         {credit > 0 && e.status !== "paid" ? <WhatsAppReminderModal customer={customer} apiKey={apiKey} hostKeyAllowed={hostKeyAllowed} model={model} apiMode={apiMode} compact /> : null}
                       </div>

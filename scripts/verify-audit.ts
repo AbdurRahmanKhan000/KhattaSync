@@ -99,7 +99,7 @@ async function main() {
       body: JSON.stringify({ input: "what is the total credit of bibi Zainab" }),
     });
     const data = (await res.json()) as { ok?: boolean; error?: string };
-    check("Live route recognises a ledger question", data.ok === false && (data.error ?? "").includes("local khata"), data.error);
+    check("Live route recognises a ledger question", data.ok === false && (data.error ?? "").includes("local ledger"), data.error);
   }
   // Voice-note action: a 1s sine WAV is not speech, but it proves the
   // plumbing — no key => no-key error; fake key => Gemini rejects the

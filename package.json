@@ -9,6 +9,7 @@
     "lint": "eslint",
     "verify:db": "tsx scripts/verify-db.ts",
     "verify:ai": "tsx scripts/verify-ai.ts",
+    "verify:agent": "tsx scripts/verify-agent.ts",
     "verify:all": "npm run verify:db && npm run verify:ai && npm run verify:audit",
     "verify:audit": "tsx scripts/verify-audit.ts"
   },

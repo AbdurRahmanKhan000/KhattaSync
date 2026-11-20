@@ -1,4 +1,6 @@
+"use client";
 import type { EntryStatus } from "@/types";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 const STYLES: Record<EntryStatus, string> = {
   credit: "bg-amber-100 text-amber-800",
@@ -7,10 +9,8 @@ const STYLES: Record<EntryStatus, string> = {
   partial: "bg-sky-100 text-sky-800",
 };
 
-const LABELS: Record<EntryStatus, string> = {
-  credit: "Credit", paid: "Paid", due: "Due", partial: "Partial",
-};
-
 export function StatusBadge({ status }: { status: EntryStatus }) {
-  return <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide ${STYLES[status]}`}>{LABELS[status]}</span>;
+  const { t } = useLanguage();
+  const label = status === "credit" ? t("credit") : status === "paid" ? t("paid") : status === "due" ? t("due") : t("partial");
+  return <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide ${STYLES[status]}`}>{label}</span>;
 }

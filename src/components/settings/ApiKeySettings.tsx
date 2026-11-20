@@ -4,15 +4,14 @@ import type { AiKeyMode } from "@/types";
 import { getAdminConfig, getSettings, saveSettings } from "@/lib/db";
 import { DEFAULT_MODEL, PROVIDER_LABELS, detectProvider, type AiProvider } from "@/lib/ai/providers";
 import { notifyDataChanged, useDashboard } from "@/components/layout/DashboardContext";
-
-const BADGE: Record<AiKeyMode, { label: string; cls: string }> = {
-  host: { label: "Host Hosted Key", cls: "bg-emerald-100 text-emerald-800" },
-  personal: { label: "Personal User API Key", cls: "bg-sky-100 text-sky-800" },
-  none: { label: "No AI Key — AI parsing off", cls: "bg-red-100 text-red-800" },
-};
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 export function ApiKeyStatusBadge({ mode }: { mode: AiKeyMode }) {
-  const b = BADGE[mode];
+  const { t } = useLanguage();
+  const b =
+    mode === "host" ? { label: t("badgeHost"), cls: "bg-emerald-100 text-emerald-800" }
+    : mode === "personal" ? { label: t("badgePersonal"), cls: "bg-sky-100 text-sky-800" }
+    : { label: t("badgeNone"), cls: "bg-red-100 text-red-800" };
   return <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${b.cls}`}>{b.label}</span>;
 }
 
@@ -23,6 +22,7 @@ type TestState =
   | { status: "error"; error: string; detail?: string };
 
 export function ApiKeySettings() {
+  const { t } = useLanguage();
   const [key, setKey] = useState("");
   const [saved, setSaved] = useState(false);
   const [hostWithdrawn, setHostWithdrawn] = useState(false);
@@ -49,8 +49,8 @@ export function ApiKeySettings() {
   const typedProvider: AiProvider | null = key.trim() ? detectProvider(key.trim()) : null;
   const detectedLabel = key.trim()
     ? typedProvider
-      ? `Detected: ${PROVIDER_LABELS[typedProvider]} — model ${DEFAULT_MODEL[typedProvider]}`
-      : "Unknown key — Gemini keys start with AIza or AQ., OpenAI with sk-, Claude with sk-ant-"
+      ? `${t("detectedLabel")} ${PROVIDER_LABELS[typedProvider]} — model ${DEFAULT_MODEL[typedProvider]}`
+      : t("keyUnknown")
     : null;
 
   async function save() {
@@ -77,26 +77,26 @@ export function ApiKeySettings() {
       if (data.ok) {
         setTest({ status: "ok", provider: data.providerLabel ?? "AI", model: data.model ?? "", reply: data.reply ?? "" });
       } else {
-        setTest({ status: "error", error: data.error ?? "Test failed.", detail: data.detail });
+        setTest({ status: "error", error: data.error ?? t("keyTestFailed"), detail: data.detail });
       }
     } catch {
-      setTest({ status: "error", error: "Could not reach the app server — check your connection and try again." });
+      setTest({ status: "error", error: t("keyUnreachable") });
     }
   }
 
   return (
     <section className="rounded-2xl border border-stone-200 bg-white p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-semibold">AI API key — Gemini, OpenAI, or Claude (BYOK)</h2>
+        <h2 className="font-semibold">{t("aiKeyTitle")}</h2>
         {loaded ? <ApiKeyStatusBadge mode={apiMode} /> : null}
       </div>
       <p className="mt-1 text-sm text-stone-500">
-        Paste any one key in this same bar — Gemini (AIza… or AQ.…), OpenAI (sk-…), or Claude (sk-ant-…). Your key is stored only in this browser (IndexedDB) and sent per-request to the AI route — never stored on a server.
-        {hostWithdrawn ? " The Admin has withdrawn the host key, so AI parsing needs your own key." : apiMode === "host" ? " If you enter your own key it takes over from the host key." : " There is no host key on the server, so AI parsing needs your own key."}
+        {t("keyIntro")}
+        {hostWithdrawn ? ` ${t("keyHostWithdrawnNote")}` : apiMode === "host" ? ` ${t("keyHostNote")}` : ` ${t("keyNoHostNote")}`}
       </p>
       {apiMode === "none" ? (
         <p role="alert" className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
-          {hostWithdrawn ? "Host key withdrawn — enter your AI key below to use AI parsing." : "No AI key is set up — enter your AI key below to use AI parsing."}
+          {hostWithdrawn ? t("keyWithdrawnAlert") : t("keyNoKeyAlert")}
         </p>
       ) : null}
       <label htmlFor="ai-key" className="sr-only">AI API key (Gemini, OpenAI, or Claude)</label>
@@ -105,10 +105,10 @@ export function ApiKeySettings() {
       {detectedLabel ? (
         <p className={`mt-2 text-sm ${typedProvider ? "text-emerald-700" : "text-amber-700"}`}>{detectedLabel}</p>
       ) : null}
-      {test.status === "testing" ? <p className="mt-2 text-sm text-stone-500">Testing the key…</p> : null}
+      {test.status === "testing" ? <p className="mt-2 text-sm text-stone-500">{t("testingKey")}</p> : null}
       {test.status === "ok" ? (
         <p role="status" className="mt-2 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-          Connected — {test.provider} · {test.model} replied “{test.reply || "OK"}”. Entries will parse with this key.
+          {t("connectedLabel")} {test.provider} · {test.model} replied “{test.reply || "OK"}”. Entries will parse with this key.
         </p>
       ) : null}
       {test.status === "error" ? (
@@ -119,13 +119,13 @@ export function ApiKeySettings() {
       ) : null}
       <div className="mt-3 flex flex-wrap gap-2">
         <button type="button" onClick={() => void save()} className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">
-          {saved ? "Saved in this browser" : "Save key"}
+          {saved ? t("savedInBrowser") : t("saveKey")}
         </button>
         <button type="button" onClick={() => void testConnection()} disabled={!key.trim() || test.status === "testing"} className="rounded-xl border border-stone-300 px-4 py-2 text-sm font-medium disabled:opacity-50">
-          Test this key
+          {t("testKey")}
         </button>
         <button type="button" onClick={() => void (async () => { const s = await getSettings(); await saveSettings({ ...s, geminiApiKey: undefined }); setKey(""); setSaved(false); setTest({ status: "idle" }); notifyDataChanged(); })()} className="rounded-xl border px-4 py-2 text-sm font-medium">
-          Remove my key
+          {t("removeKey")}
         </button>
       </div>
     </section>

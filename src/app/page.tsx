@@ -6,10 +6,12 @@ import { LedgerTable, TransactionEntryBar } from "@/components/ledger";
 import { DemoLoader, Toast } from "@/components/shared";
 import { addEntry, updateTransaction } from "@/lib/db";
 import { saveParsedEntry } from "@/lib/ledger-save";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 import type { LedgerEntry, ParsedLedgerResult } from "@/types";
 
 export default function DashboardPage() {
   const { customers, transactions, loading, selectedCustomerId, apiMode, apiProvider, userApiKey, adminConfig, today, reload } = useDashboard();
+  const { t } = useLanguage();
   const [toast, setToast] = useState<string | null>(null);
 
   const selectedCustomer = useMemo(
@@ -59,13 +61,13 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <Topbar title={selectedCustomer ? `${selectedCustomer.name} — Khata` : "Dashboard"} subtitle={selectedCustomer ? `Balance ${formatPKR(Math.abs(selectedCustomer.balance))} · ${selectedCustomer.balance > 0 ? "to collect" : selectedCustomer.balance < 0 ? "to pay" : "settled"}` : "Your digital khata — who owes what, at a glance."} />
+      <Topbar title={selectedCustomer ? `${selectedCustomer.name} — ${t("tableTitle")}` : t("navDashboard")} subtitle={selectedCustomer ? `${t("balanceLabel")} ${formatPKR(Math.abs(selectedCustomer.balance))} · ${selectedCustomer.balance > 0 ? t("toCollect") : selectedCustomer.balance < 0 ? t("toPay") : t("settled")}` : t("dashboardSubtitle")} />
       <div className="space-y-6 p-4 sm:p-6">
         <KpiHeader totalUdhaar={totalUdhaar} collectedToday={collectedToday} activeCustomers={activeCustomers} apiMode={apiMode} apiProvider={apiProvider} loading={loading} />
 
         <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5" aria-label="Quick record">
-          <h2 className="text-sm font-semibold">Quick Record</h2>
-          <p className="mt-0.5 text-xs text-stone-500">Type or speak an entry — Gemini parses it into a structured ledger line. No amount yet? The agent will ask for it. For a full conversation, open the AI Agent.</p>
+          <h2 className="text-sm font-semibold">{t("quickRecord")}</h2>
+          <p className="mt-0.5 text-xs text-stone-500">{t("quickRecordHint")}</p>
           <div className="mt-3">
             <TransactionEntryBar
               onParsed={(r, raw, src) => void handleParsed(r, raw, src)}
@@ -76,6 +78,7 @@ export default function DashboardPage() {
               audioEnabled={adminConfig?.audioTranscriptionEnabled ?? true}
               apiMode={apiMode}
               customers={customers}
+              transactions={transactions}
               totalUdhaar={totalUdhaar}
               collectedToday={collectedToday}
             />
@@ -86,15 +89,15 @@ export default function DashboardPage() {
 
         {customers.length === 0 && !loading ? (
           <section className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
-            <h2 className="font-semibold">Your khata is empty</h2>
-            <p className="mt-1 text-sm text-stone-500">Add a customer from the sidebar, record your first entry above, or load the Peshawar sample shop to explore.</p>
+            <h2 className="font-semibold">{t("emptyLedgerTitle")}</h2>
+            <p className="mt-1 text-sm text-stone-500">{t("emptyLedgerHint")}</p>
             <div className="mt-4"><DemoLoader /></div>
           </section>
         ) : null}
 
         <section className="rounded-2xl border border-stone-200 bg-white shadow-sm" aria-label="Ledger">
           <h2 className="border-b border-stone-200 px-4 py-4 font-semibold">
-            {selectedCustomer ? `Entries — ${selectedCustomer.name}` : "Recent entries"}
+            {selectedCustomer ? `${t("entriesWord")} — ${selectedCustomer.name}` : t("recentEntries")}
           </h2>
           <LedgerTable
             entries={visibleTransactions}

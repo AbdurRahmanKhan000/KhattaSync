@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
     // no AI call is needed, so never send one to any provider. (The agent
     // action is the exception: it answers from the snapshot on purpose.)
     if (action !== "voice" && action !== "ping" && action !== "agent" && isLedgerQuery(input)) {
-      const message = "That's a question about your ledger — the app answers it instantly from your local khata, no AI call needed.";
+      const message = "That's a question about your ledger — the app answers it instantly from your local ledger, no AI call needed.";
       return NextResponse.json({ ok: false, error: message, parsed: rejectedResult(message) });
     }
 
@@ -119,32 +119,51 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "agent") {
-      // Conversational agent: answers from the snapshot, asks for missing
-      // information, returns a structured entry only when it is complete.
-      // The snapshot is the app's own ledger data, sent per-request only;
-      // the server stores nothing.
+      // Agentic agent: answers in full from the snapshot, asks for
+      // missing information, and returns a PLAN of actions (add a
+      // customer, save an entry, settle a balance) that the app executes
+      // in order against the ledger in the browser. The snapshot is the
+      // app's own ledger data, sent per-request only; the server stores
+      // nothing. The reply language follows the app's UI language.
       const history: AgentHistoryItem[] = Array.isArray(body.history)
         ? (body.history as { role?: unknown; text?: unknown }[])
           .filter((h) => (h.role === "user" || h.role === "agent") && typeof h.text === "string")
           .slice(-8)
           .map((h) => ({ role: h.role as "user" | "agent", text: (h.text as string).slice(0, 500) }))
         : [];
+      const language = ["en", "ur", "ps", "pa", "sd", "ar", "hi"].includes(typeof body.language === "string" ? body.language : "")
+        ? (body.language as string)
+        : "en";
       const snap = (body.snapshot ?? {}) as { customers?: unknown; totalUdhaar?: unknown; collectedToday?: unknown; totalCustomers?: unknown };
       const snapshot: LedgerSnapshot = {
         customers: Array.isArray(snap.customers)
-          ? (snap.customers as { name?: unknown; balance?: unknown }[])
+          ? (snap.customers as { name?: unknown; balance?: unknown; recent?: unknown }[])
             .filter((c) => typeof c.name === "string")
-            .slice(0, 50)
-            .map((c) => ({ name: (c.name as string).slice(0, 80), balance: typeof c.balance === "number" && Number.isFinite(c.balance) ? c.balance : 0 }))
+            .slice(0, 30)
+            .map((c) => ({
+              name: (c.name as string).slice(0, 80),
+              balance: typeof c.balance === "number" && Number.isFinite(c.balance) ? c.balance : 0,
+              recent: Array.isArray(c.recent)
+                ? (c.recent as { date?: unknown; type?: unknown; amount?: unknown; note?: unknown }[])
+                  .filter((e) => typeof e.date === "string" && (e.type === "gave" || e.type === "got") && typeof e.amount === "number" && Number.isFinite(e.amount))
+                  .slice(0, 3)
+                  .map((e) => ({
+                    date: (e.date as string).slice(0, 10),
+                    type: e.type as "gave" | "got",
+                    amount: e.amount as number,
+                    ...(typeof e.note === "string" && e.note ? { note: e.note.slice(0, 120) } : {}),
+                  }))
+                : [],
+            }))
           : [],
         totalUdhaar: typeof snap.totalUdhaar === "number" && Number.isFinite(snap.totalUdhaar) ? snap.totalUdhaar : 0,
         collectedToday: typeof snap.collectedToday === "number" && Number.isFinite(snap.collectedToday) ? snap.collectedToday : 0,
         totalCustomers: typeof snap.totalCustomers === "number" && Number.isFinite(snap.totalCustomers) ? snap.totalCustomers : 0,
       };
-      const agentReply = await agentReplyWithProvider(input, history, snapshot, opts);
+      const agentReply = await agentReplyWithProvider(input, history, snapshot, { ...opts, language });
       return NextResponse.json({
         ok: true, keyMode: resolved.mode, provider, model,
-        reply: agentReply.reply, intent: agentReply.intent, entry: agentReply.entry,
+        reply: agentReply.reply, intent: agentReply.intent, actions: agentReply.actions,
       });
     }
 

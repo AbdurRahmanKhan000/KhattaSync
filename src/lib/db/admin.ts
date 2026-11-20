@@ -11,7 +11,7 @@ export const DEFAULT_ADMIN_CONFIG: AdminConfig = {
   passwordHash: DEFAULT_ADMIN_PASSWORD_HASH,
   hostKeyWithdrawn: false,
   model: "gemini-3.5-flash-lite",
-  thinkingBudget: "standard",
+  thinkingBudget: "low",
   maxDailyEntries: 500,
   audioTranscriptionEnabled: true,
   sampleDataLocked: false,

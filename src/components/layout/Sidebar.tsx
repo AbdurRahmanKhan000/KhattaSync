@@ -7,16 +7,19 @@ import { formatPKR } from "@/lib/utils";
 import { notifyDataChanged, useDashboard } from "./DashboardContext";
 import { createCustomer } from "@/lib/db";
 import { NewCustomerModal } from "@/components/ledger";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
+import type { I18nKey } from "@/lib/i18n/strings";
 
-const NAV = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/agent", label: "AI Agent", icon: Bot },
-  { href: "/customers", label: "Customers", icon: Users },
-  { href: "/settings", label: "Settings", icon: Settings },
+const NAV: { href: string; label: I18nKey; icon: typeof LayoutDashboard }[] = [
+  { href: "/", label: "navDashboard", icon: LayoutDashboard },
+  { href: "/agent", label: "navAgent", icon: Bot },
+  { href: "/customers", label: "navCustomers", icon: Users },
+  { href: "/settings", label: "navSettings", icon: Settings },
 ];
 
 function SidebarContent() {
   const pathname = usePathname();
+  const { t } = useLanguage();
   const { customers, selectedCustomerId, setSelectedCustomerId, setSidebarOpen } = useDashboard();
   const [query, setQuery] = useState("");
   const [newOpen, setNewOpen] = useState(false);
@@ -37,7 +40,7 @@ function SidebarContent() {
           <BookOpen className="h-6 w-6 text-emerald-700" />
           <span className="text-lg font-bold tracking-tight">KhattaSync</span>
         </div>
-        <button type="button" aria-label="Close menu" onClick={() => setSidebarOpen(false)} className="rounded-lg p-1 hover:bg-stone-100 md:hidden">
+        <button type="button" aria-label={t("closeMenu")} onClick={() => setSidebarOpen(false)} className="rounded-lg p-1 hover:bg-stone-100 md:hidden">
           <X className="h-5 w-5" />
         </button>
       </div>
@@ -46,37 +49,37 @@ function SidebarContent() {
         {NAV.map(({ href, label, icon: Icon }) => (
           <Link key={href} href={href} onClick={() => setSidebarOpen(false)} aria-current={pathname === href ? "page" : undefined}
             className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium ${pathname === href ? "bg-emerald-50 text-emerald-800" : "text-stone-600 hover:bg-stone-50"}`}>
-            <Icon className="h-4 w-4" /> {label}
+            <Icon className="h-4 w-4" /> {t(label)}
           </Link>
         ))}
       </nav>
 
       <div className="mt-6 flex-1 overflow-y-auto px-4 pb-4">
-        <h2 className="px-1 text-xs font-bold uppercase tracking-wider text-stone-500">Customer Ledgers (Khata)</h2>
+        <h2 className="px-1 text-xs font-bold uppercase tracking-wider text-stone-500">{t("customerLedgers")}</h2>
 
         <div className="mt-3 flex gap-2">
-          <span className="flex-1 whitespace-nowrap rounded-full bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-800">Lena Hai · {formatPKR(receivable)}</span>
-          <span className="flex-1 whitespace-nowrap rounded-full bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-800">Dena Hai · {formatPKR(payable)}</span>
+          <span className="flex-1 whitespace-nowrap rounded-full bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-800">{t("toCollect")} · {formatPKR(receivable)}</span>
+          <span className="flex-1 whitespace-nowrap rounded-full bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-800">{t("toPay")} · {formatPKR(payable)}</span>
         </div>
 
         <label className="mt-3 flex items-center gap-2 rounded-xl border border-stone-300 px-3 py-2">
           <Search className="h-4 w-4 shrink-0 text-stone-400" />
-          <span className="sr-only">Search customers</span>
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search khata…" className="min-w-0 flex-1 text-sm outline-none" />
+          <span className="sr-only">{t("searchCustomers")}</span>
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("searchCustomers")} className="min-w-0 flex-1 text-sm outline-none" />
         </label>
 
         <button type="button" onClick={() => setNewOpen(true)} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800">
-          <Plus className="h-4 w-4" /> New Customer
+          <Plus className="h-4 w-4" /> {t("newCustomer")}
         </button>
 
         {filtered.length === 0 ? (
-          <p className="mt-4 px-1 text-sm text-stone-500">{customers.length === 0 ? "No customers yet — add your first khata, or load the sample shop." : "No customer matches that search."}</p>
+          <p className="mt-4 px-1 text-sm text-stone-500">{customers.length === 0 ? t("noCustomersYet") : t("noCustomerMatch")}</p>
         ) : (
           <ul className="mt-3 space-y-1" aria-label="Customer ledgers">
             <li>
               <button type="button" onClick={() => { setSelectedCustomerId(null); setSidebarOpen(false); }}
                 className={`w-full rounded-xl px-3 py-2.5 text-left text-sm font-medium ${selectedCustomerId === null ? "bg-emerald-50 text-emerald-800" : "hover:bg-stone-50"}`}>
-                All customers · {customers.length}
+                {t("allCustomers")} · {customers.length}
               </button>
             </li>
             {filtered.map((c) => (
@@ -89,7 +92,7 @@ function SidebarContent() {
                       {formatPKR(Math.abs(c.balance))}
                     </span>
                   </span>
-                  <span className="mt-0.5 block text-xs text-stone-500">{c.balance > 0 ? "To collect" : c.balance < 0 ? "To pay" : "Settled"}{c.isOverdue ? " · Overdue" : ""}</span>
+                  <span className="mt-0.5 block text-xs text-stone-500">{c.balance > 0 ? t("toCollect") : c.balance < 0 ? t("toPay") : t("settled")}{c.isOverdue ? ` · ${t("overdue")}` : ""}</span>
                 </button>
               </li>
             ))}
@@ -97,7 +100,7 @@ function SidebarContent() {
         )}
       </div>
 
-      <p className="border-t border-stone-100 px-4 py-3 text-xs text-stone-400">Your data stays in this browser only.</p>
+      <p className="border-t border-stone-100 px-4 py-3 text-xs text-stone-400">{t("dataStaysBrowser")}</p>
       <NewCustomerModal open={newOpen} onClose={() => setNewOpen(false)} onCreate={(name, phone) => {
         void (async () => {
           const id = `cust-${crypto.randomUUID()}`;

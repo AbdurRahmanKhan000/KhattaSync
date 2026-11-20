@@ -1,7 +1,7 @@
 import type { CustomerAccount, EntryLog, LedgerEntry } from "@/types";
 
 export const APP_NAME = "KhattaSync";
-export const APP_TAGLINE = "Your digital khata — voice, text, done.";
+export const APP_TAGLINE = "Your digital ledger — voice, text, done.";
 export const CURRENCY = "PKR" as const;
 
 export const SYSTEM_LIMITS = {
@@ -50,7 +50,7 @@ export const SAMPLE_SHOP_TRANSACTIONS: LedgerEntry[] = [
   { id: "txn-04", customerId: "cust-bibi-zainab", customerName: "Bibi Zainab", type: "gave", amount: 3200, status: "credit", note: "Monthly rashan", date: "2026-11-19", createdAt: "2026-11-19T11:00:00Z", updatedAt: "2026-11-19T11:00:00Z", source: "voice", rawInput: "Bibi Zainab ko 3200 ka rashan udhaar" },
   { id: "txn-05", customerId: "cust-imran-afridi", customerName: "Imran Afridi", type: "gave", amount: 15200, status: "due", note: "Cement + grocery, 10 din purana", date: "2026-11-15", createdAt: "2026-11-15T09:00:00Z", updatedAt: "2026-11-15T09:00:00Z", source: "text", rawInput: "Imran Afridi 15200 udhaar" },
   { id: "txn-06", customerId: "cust-naseem-akta", customerName: "Naseem Akhtar", type: "gave", amount: 6000, status: "paid", note: "Sabzi + fruit", date: "2026-11-18", createdAt: "2026-11-18T12:00:00Z", updatedAt: "2026-11-18T12:00:00Z", source: "manual" },
-  { id: "txn-07", customerId: "cust-naseem-akta", customerName: "Naseem Akhtar", type: "got", amount: 6000, status: "paid", note: "Full payment, khata clear", date: "2026-11-18", createdAt: "2026-11-18T18:00:00Z", updatedAt: "2026-11-18T18:00:00Z", source: "text", rawInput: "Naseem Akhtar ne 6000 ada kar diye" },
+  { id: "txn-07", customerId: "cust-naseem-akta", customerName: "Naseem Akhtar", type: "got", amount: 6000, status: "paid", note: "Full payment, ledger clear", date: "2026-11-18", createdAt: "2026-11-18T18:00:00Z", updatedAt: "2026-11-18T18:00:00Z", source: "text", rawInput: "Naseem Akhtar ne 6000 ada kar diye" },
   { id: "txn-08", customerId: "cust-shahid-khan", customerName: "Shahid Khan", type: "gave", amount: 6750, status: "credit", note: "Cooking oil, rice, sugar", date: "2026-11-20", createdAt: "2026-11-20T08:30:00Z", updatedAt: "2026-11-20T08:30:00Z", source: "voice", rawInput: "Shahid Khan ko 6750 ka udhaar diya" },
   { id: "txn-09", customerId: "cust-rabia-bibi", customerName: "Rabia Bibi", type: "gave", amount: 2100, status: "credit", note: "Doodh + anda, weekly", date: "2026-11-17", createdAt: "2026-11-17T09:00:00Z", updatedAt: "2026-11-17T09:00:00Z", source: "manual" },
   { id: "txn-10", customerId: "cust-imran-afridi", customerName: "Imran Afridi", type: "gave", amount: 6800, status: "due", note: "Pehlay ka baqaya", date: "2026-11-10", createdAt: "2026-11-10T09:00:00Z", updatedAt: "2026-11-10T09:00:00Z", source: "text", rawInput: "Imran Afridi 6800 aur udhaar" },

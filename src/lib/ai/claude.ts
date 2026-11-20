@@ -87,7 +87,7 @@ export async function agentReplyJsonClaude(prompt: string, opts: ClaudeOptions):
       tools: [
         {
           name: "agent_reply",
-          description: "Reply to the shopkeeper as the KhattaSync AI agent: a short message, an intent, and a ledger entry only when it is complete enough to save.",
+          description: "Reply to the shopkeeper as the KhattaSync AI agent: a full message, an intent, and a plan of ledger actions (add a customer, save an entry, settle a balance) when the request is complete enough to act on.",
           input_schema: AGENT_REPLY_SCHEMA,
         },
       ],
