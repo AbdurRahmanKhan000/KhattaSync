@@ -3,7 +3,7 @@ import type { AiKeyMode, AiModel, ParsedLedgerResult, ThinkingBudget } from "../
 import { DEFAULT_AI_MODEL } from "../../constants";
 import { repairParsedLedgerResult } from "../security";
 import { LEDGER_RESPONSE_SCHEMA, LEDGER_SYSTEM_PROMPT } from "./ledger-schema";
-import { DEFAULT_MODEL, GEMINI_FALLBACK_MODEL, detectProvider, modelForProvider, type AiProvider } from "./providers";
+import { DEFAULT_MODEL, detectProvider, modelForProvider, type AiProvider } from "./providers";
 import { parseLedgerWithOpenAi, pingOpenAi } from "./openai";
 import { parseLedgerWithClaude, pingClaude } from "./claude";
 
@@ -164,19 +164,13 @@ export async function parseLedgerWithAi(input: string, opts: ParseLedgerOptions)
   const budget = opts.thinkingBudget ?? "standard";
   let text: string;
   try {
+    // Sent directly to the configured model — never silently re-routed to
+    // another model. If this model is not available for the key, the error
+    // says so plainly (friendlyAiErrorMessage maps 404 to "model not
+    // available") instead of the request landing on a different model.
     text = await generateLedgerGemini(input, opts.apiKey, model, budget);
   } catch (err) {
-    // A model this key/project cannot use must not kill the entry: retry
-    // once with the cheapest Gemini model, then surface the real error.
-    if (isModelNotFoundError(err) && model !== GEMINI_FALLBACK_MODEL) {
-      try {
-        text = await generateLedgerGemini(input, opts.apiKey, GEMINI_FALLBACK_MODEL, budget);
-      } catch (fallbackErr) {
-        throw new Error(friendlyAiErrorMessage(fallbackErr, "gemini"));
-      }
-    } else {
-      throw new Error(friendlyAiErrorMessage(err, "gemini"));
-    }
+    throw new Error(friendlyAiErrorMessage(err, "gemini"));
   }
   return parseAndRepair(text, "Gemini");
 }
@@ -261,28 +255,9 @@ export async function parseVoiceNoteWithAi(
       },
     });
   } catch (err) {
-    if (isModelNotFoundError(err) && model !== GEMINI_FALLBACK_MODEL) {
-      try {
-        const retry = await ai.models.generateContent({
-          model: GEMINI_FALLBACK_MODEL,
-          contents: [
-            { inlineData: { mimeType: baseMime, data: audioBase64 } },
-            { text: "Transcribe this voice note from a Pakistani shopkeeper (Urdu, Pashto, Roman Urdu, or English), then parse it as a ledger entry using the system instructions." },
-          ],
-          config: {
-            systemInstruction: LEDGER_SYSTEM_PROMPT,
-            responseMimeType: "application/json",
-            responseJsonSchema: LEDGER_RESPONSE_SCHEMA,
-            ...thinkingConfigFor(GEMINI_FALLBACK_MODEL, budget),
-          },
-        });
-        res = retry;
-      } catch (fallbackErr) {
-        throw new Error(friendlyAiErrorMessage(fallbackErr, "gemini"));
-      }
-    } else {
-      throw new Error(friendlyAiErrorMessage(err, "gemini"));
-    }
+    // Direct to the configured model only — no silent re-route to another
+    // model on 404; the error names the model problem instead.
+    throw new Error(friendlyAiErrorMessage(err, "gemini"));
   }
   const text = res.text ?? "";
   return parseAndRepair(text, "Gemini");

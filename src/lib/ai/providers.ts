@@ -54,9 +54,6 @@ export const DEFAULT_MODEL: Record<AiProvider, AiModel> = {
   claude: "claude-haiku-4-5",
 };
 
-/** Gemini fallback when the configured model is not available for this key/project. */
-export const GEMINI_FALLBACK_MODEL: AiModel = "gemini-3.5-flash-lite";
-
 /** Pick the model for a provider: the stored choice if it belongs to that provider, else the provider default. */
 export function modelForProvider(provider: AiProvider, stored?: string): AiModel {
   const list = PROVIDER_MODELS[provider];
