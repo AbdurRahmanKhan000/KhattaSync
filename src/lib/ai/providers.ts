@@ -34,14 +34,16 @@ export function detectProvider(apiKey: string): AiProvider | null {
 
 /** Models offered per provider. Defaults are the cheapest fast model that can do strict JSON. */
 export const PROVIDER_MODELS: Record<AiProvider, AiModel[]> = {
-  gemini: ["gemini-3.8-flash", "gemini-3.5-flash-lite"],
+  // Gemini default is the lightest, fastest model: this khata's entries
+  // are short structured parses and do not need the larger model.
+  gemini: ["gemini-3.5-flash-lite", "gemini-3.8-flash"],
   openai: ["gpt-4o-mini", "gpt-4o"],
   claude: ["claude-haiku-4-5", "claude-sonnet-5"],
 };
 
 export const PROVIDER_MODEL_LABELS: Record<AiModel, string> = {
-  "gemini-3.8-flash": "Gemini 3.8 Flash (default)",
-  "gemini-3.5-flash-lite": "Gemini 3.5 Flash-Lite",
+  "gemini-3.8-flash": "Gemini 3.8 Flash",
+  "gemini-3.5-flash-lite": "Gemini 3.5 Flash-Lite (default)",
   "gpt-4o-mini": "GPT-4o mini (default)",
   "gpt-4o": "GPT-4o",
   "claude-haiku-4-5": "Claude Haiku 4.5 (default)",
@@ -49,7 +51,7 @@ export const PROVIDER_MODEL_LABELS: Record<AiModel, string> = {
 };
 
 export const DEFAULT_MODEL: Record<AiProvider, AiModel> = {
-  gemini: "gemini-3.8-flash",
+  gemini: "gemini-3.5-flash-lite",
   openai: "gpt-4o-mini",
   claude: "claude-haiku-4-5",
 };

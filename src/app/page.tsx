@@ -4,7 +4,8 @@ import { formatPKR } from "@/lib/utils";
 import { KpiHeader, Topbar, useDashboard } from "@/components/layout";
 import { LedgerTable, TransactionEntryBar } from "@/components/ledger";
 import { DemoLoader, Toast } from "@/components/shared";
-import { addEntry, addTransaction, createCustomer, listCustomers, logEntry, updateTransaction } from "@/lib/db";
+import { addEntry, updateTransaction } from "@/lib/db";
+import { saveParsedEntry } from "@/lib/ledger-save";
 import type { LedgerEntry, ParsedLedgerResult } from "@/types";
 
 export default function DashboardPage() {
@@ -29,44 +30,12 @@ export default function DashboardPage() {
   const activeCustomers = useMemo(() => customers.filter((c) => c.balance !== 0).length, [customers]);
 
   async function handleParsed(result: ParsedLedgerResult, rawInput: string, source: "text" | "voice") {
-    const name = result.customer_name.trim();
-    const now = new Date();
-    const date = now.toISOString().slice(0, 10);
-    const stamp = now.toISOString();
-    // Find or create the customer, then post the entry — optimistic: the
-    // table updates from local IndexedDB the moment reload() lands.
-    let customer = customers.find((c) => c.name.toLowerCase() === name.toLowerCase());
-    if (!customer) {
-      const id = `cust-${crypto.randomUUID()}`;
-      await createCustomer({ id, name, balance: 0, totalGave: 0, totalGot: 0, lastActivity: date, isOverdue: false });
-      const fresh = await listCustomers();
-      customer = fresh.find((c) => c.id === id);
-      if (!customer) return;
-    }
-    const isPayment = result.action_type === "payment";
-    const entry: LedgerEntry = {
-      id: `txn-${crypto.randomUUID()}`,
-      customerId: customer.id,
-      customerName: customer.name,
-      type: isPayment ? "got" : "gave",
-      amount: result.total_amount,
-      status: result.credit_balance_change > 0 ? (customer.isOverdue ? "due" : "credit") : "paid",
-      note: result.items.map((i) => `${i.name} — ${formatPKR(i.amount)}`).join(", ") || undefined,
-      items: result.items,
-      date,
-      createdAt: stamp,
-      updatedAt: stamp,
-      source,
-      rawInput,
-    };
-    await addTransaction(entry);
-    await logEntry({
-      id: `log-${crypto.randomUUID()}`, rawInput, source,
-      status: "parsed", customerName: customer.name, amount: result.total_amount,
-      transactionId: entry.id, createdAt: stamp,
-    });
+    // One shared save path (see src/lib/ledger-save.ts) — the AI Agent
+    // page saves through the exact same code.
+    const saved = await saveParsedEntry(result, rawInput, source, { customers });
+    if (!saved) return;
     await reload();
-    setToast(`Saved: ${customer.name} — ${formatPKR(result.total_amount)}`);
+    setToast(`Saved: ${saved.customerName} — ${formatPKR(saved.amount)}`);
     window.setTimeout(() => setToast(null), 4000);
   }
 
@@ -96,7 +65,7 @@ export default function DashboardPage() {
 
         <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5" aria-label="Quick record">
           <h2 className="text-sm font-semibold">Quick Record</h2>
-          <p className="mt-0.5 text-xs text-stone-500">Type or speak an entry — your AI key parses it into a structured ledger line.</p>
+          <p className="mt-0.5 text-xs text-stone-500">Type or speak an entry — Gemini parses it into a structured ledger line. No amount yet? The agent will ask for it. For a full conversation, open the AI Agent.</p>
           <div className="mt-3">
             <TransactionEntryBar
               onParsed={(r, raw, src) => void handleParsed(r, raw, src)}

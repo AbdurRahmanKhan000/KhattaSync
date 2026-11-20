@@ -14,6 +14,10 @@
  *    each provider's fake key is rejected with that provider's name, an
  *    unknown key is refused plainly, and the Settings "Test" (ping) action
  *    returns the provider's own error as `detail`.
+ * 7) Structured errors + AI Agent: a failed parse carries the provider's
+ *    own error as `detail` (never the generic line echoed back), and the
+ *    agent action answers through the same provider routing — a fake key
+ *    is rejected with its real cause, and no key is refused plainly.
  * Usage: BASE_URL=http://localhost:3000 npx tsx scripts/verify-audit.ts
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -172,6 +176,52 @@ async function main() {
     check("Live ping with a fake AQ. key => routed to Gemini, key rejection",
       data.ok === false && data.provider === "gemini" && /rejected/i.test(data.error ?? ""), `HTTP ${res.status} — ${data.error}`);
   }
+  // Structured errors: a failed parse must carry the provider's OWN error
+  // as `detail` — the generic line must never echo back as its own cause.
+  // (This is the failure behind "AI parsing failed" + "Provider said: AI
+  // parsing failed" on live: the raw cause was destroyed before the UI.)
+  {
+    const res = await fetch(`${BASE}/api/parse-ledger`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ input: "zainab took 300 udhaar", apiKey: "AQ.Ab8RN6IxkvazkDr16g5K123456" }),
+    });
+    const data = (await res.json()) as { ok?: boolean; error?: string; detail?: string };
+    check("Live parse with a fake AQ. key => detail carries Gemini's own reason, not the generic line",
+      data.ok === false && (data.detail ?? "").includes("ACCESS_TOKEN_TYPE_UNSUPPORTED") && data.detail !== data.error,
+      `HTTP ${res.status} — ${data.error} | detail: ${data.detail}`);
+  }
+  // AI Agent: same provider routing, same structured errors — a fake key
+  // is rejected with its real cause, and no key is refused plainly.
+  {
+    const snapshot = { customers: [{ name: "Bibi Zainab", balance: 3200 }], totalUdhaar: 3200, collectedToday: 200, totalCustomers: 1 };
+    const res = await fetch(`${BASE}/api/parse-ledger`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "agent", input: "What does Bibi Zainab owe?", history: [], snapshot, apiKey: "AQ.Ab8RN6IxkvazkDr16g5K123456" }),
+    });
+    const data = (await res.json()) as { ok?: boolean; error?: string; detail?: string };
+    check("Live agent with a fake AQ. key => rejected with the real provider cause",
+      data.ok === false && /rejected/i.test(data.error ?? "") && (data.detail ?? "").includes("ACCESS_TOKEN_TYPE_UNSUPPORTED"),
+      `HTTP ${res.status} — ${data.error} | detail: ${data.detail}`);
+  }
+  {
+    const res = await fetch(`${BASE}/api/parse-ledger`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "agent", input: "What does Bibi Zainab owe?", history: [], snapshot: { customers: [], totalUdhaar: 0, collectedToday: 0, totalCustomers: 0 } }),
+    });
+    const data = (await res.json()) as { ok?: boolean; error?: string };
+    check("Live agent with no key => plain no-key message",
+      data.ok === false && /No AI key available/i.test(data.error ?? ""), `HTTP ${res.status} — ${data.error}`);
+  }
+  {
+    const res = await fetch(`${BASE}/api/parse-ledger`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "agent", input: "Ahmad bought one kilo onion and will pay after 3 days", history: [], snapshot: { customers: [], totalUdhaar: 0, collectedToday: 0, totalCustomers: 0 }, apiKey: "AIzaFakeKeyForTest123" }),
+    });
+    const data = (await res.json()) as { ok?: boolean; error?: string; detail?: string };
+    check("Live agent with a fake AIza key => rejected with the provider's own words",
+      data.ok === false && /rejected/i.test(data.error ?? "") && (data.detail ?? "").includes("API_KEY_INVALID"),
+      `HTTP ${res.status} — ${data.error} | detail: ${data.detail}`);
+  }
 
   // --- 2) Secrets ---
   const srcFiles = walk(join(root, "src"));
@@ -201,6 +251,7 @@ async function main() {
   // --- 5) Resilience messages ---
   check("429 maps to a friendly rate-limit message", friendlyAiErrorMessage({ status: 429 }).includes("rate limit"));
   check("401 maps to a friendly invalid-key message", friendlyAiErrorMessage({ status: 401, message: "API_KEY_INVALID" }).includes("key was rejected"));
+  check("503 maps to a friendly overloaded message, not generic failure", friendlyAiErrorMessage({ status: 503, message: "The model is overloaded" }).includes("overloaded"));
   check("Network failure maps to a friendly message", friendlyAiErrorMessage(new Error("fetch failed")).includes("internet"));
   check("Unknown error maps to a generic retry message", friendlyAiErrorMessage(new Error("boom")).includes("try again"));
   check("Already-friendly message passes through unchanged", friendlyAiErrorMessage(new Error("That Gemini API key was rejected — check the key in Settings.")) === "That Gemini API key was rejected — check the key in Settings.");

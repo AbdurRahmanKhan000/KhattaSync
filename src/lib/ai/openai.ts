@@ -1,5 +1,6 @@
 import type { ParsedLedgerResult } from "../../types";
 import { LEDGER_RESPONSE_SCHEMA, LEDGER_SYSTEM_PROMPT } from "./ledger-schema";
+import { AGENT_SYSTEM_PROMPT } from "./agent-schema";
 import { repairParsedLedgerResult } from "../security";
 
 /**
@@ -68,7 +69,30 @@ export async function parseLedgerWithOpenAi(input: string, opts: OpenAiOptions):
   return parseOpenAiJson(data.choices?.[0]?.message?.content ?? "");
 }
 
-/** Cheap liveness probe for the Settings "Test" button: 5 output tokens, no ledger work. */
+/** Agent call for OpenAI: plain JSON object mode (the reply is conversational, so strict schema is unnecessary — the server validates it). */
+export async function agentReplyJsonOpenAi(prompt: string, opts: OpenAiOptions): Promise<string> {
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${opts.apiKey}`,
+    },
+    body: JSON.stringify({
+      model: opts.model,
+      messages: [
+        { role: "system", content: AGENT_SYSTEM_PROMPT },
+        { role: "user", content: prompt },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.2,
+    }),
+  });
+  if (!res.ok) throw new Error(await openAiErrorText(res));
+  const data = (await res.json()) as { choices?: { message?: { content?: string | null } }[] };
+  const text = data.choices?.[0]?.message?.content ?? "";
+  if (!text) throw new Error("OpenAI did not return a reply.");
+  return text;
+}
 export async function pingOpenAi(opts: OpenAiOptions): Promise<string> {
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",

@@ -1,5 +1,6 @@
 import type { ParsedLedgerResult } from "../../types";
 import { LEDGER_RESPONSE_SCHEMA, LEDGER_SYSTEM_PROMPT } from "./ledger-schema";
+import { AGENT_REPLY_SCHEMA, AGENT_SYSTEM_PROMPT } from "./agent-schema";
 import { repairParsedLedgerResult } from "../security";
 
 /**
@@ -68,6 +69,37 @@ export async function parseLedgerWithClaude(input: string, opts: ClaudeOptions):
   const repaired = repairParsedLedgerResult(toolUse.input);
   if (!repaired.ok || !repaired.result) throw new Error(repaired.error ?? "Claude output failed validation.");
   return repaired.result;
+}
+
+/** Agent call for Claude: forced tool use with the agent reply as the tool's input schema. */
+export async function agentReplyJsonClaude(prompt: string, opts: ClaudeOptions): Promise<unknown> {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": opts.apiKey,
+      "anthropic-version": ANTHROPIC_VERSION,
+    },
+    body: JSON.stringify({
+      model: opts.model,
+      max_tokens: 1024,
+      system: AGENT_SYSTEM_PROMPT,
+      tools: [
+        {
+          name: "agent_reply",
+          description: "Reply to the shopkeeper as the KhattaSync AI agent: a short message, an intent, and a ledger entry only when it is complete enough to save.",
+          input_schema: AGENT_REPLY_SCHEMA,
+        },
+      ],
+      tool_choice: { type: "tool", name: "agent_reply" },
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+  if (!res.ok) throw new Error(await claudeErrorText(res));
+  const data = (await res.json()) as ClaudeMessageResponse;
+  const toolUse = data.content?.find((b) => b.type === "tool_use");
+  if (!toolUse || toolUse.input === undefined) throw new Error("Claude did not return an agent reply.");
+  return toolUse.input;
 }
 
 /** Cheap liveness probe for the Settings "Test" button: 5 output tokens, no ledger work. */

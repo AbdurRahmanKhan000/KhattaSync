@@ -65,11 +65,11 @@ export const SAMPLE_SHOP_ENTRY_LOGS: EntryLog[] = [
 export const DEMO_CUSTOMERS: CustomerAccount[] = SAMPLE_SHOP_CUSTOMERS;
 export const DEMO_ENTRIES: LedgerEntry[] = SAMPLE_SHOP_TRANSACTIONS;
 
-export const AI_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gpt-4o-mini", "gpt-4o", "claude-haiku-4-5", "claude-sonnet-5"] as const;
-export const DEFAULT_AI_MODEL = "gemini-3.8-flash" as const;
+export const AI_MODELS = ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gpt-4o-mini", "gpt-4o", "claude-haiku-4-5", "claude-sonnet-5"] as const;
+export const DEFAULT_AI_MODEL = "gemini-3.5-flash-lite" as const;
 export const AI_MODEL_LABELS: Record<string, string> = {
-  "gemini-3.8-flash": "Gemini 3.8 Flash — fast (default)",
-  "gemini-3.5-flash-lite": "Gemini 3.5 Flash-Lite — fastest / cheapest",
+  "gemini-3.8-flash": "Gemini 3.8 Flash — fast",
+  "gemini-3.5-flash-lite": "Gemini 3.5 Flash-Lite — fastest / cheapest (default)",
   "gpt-4o-mini": "GPT-4o mini — fast (default)",
   "gpt-4o": "GPT-4o — most capable OpenAI",
   "claude-haiku-4-5": "Claude Haiku 4.5 — fast (default)",

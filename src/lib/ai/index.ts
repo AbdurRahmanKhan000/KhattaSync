@@ -17,7 +17,7 @@ export { LEDGER_RESPONSE_SCHEMA, LEDGER_SYSTEM_PROMPT } from "./ledger-schema";
  * whichever key the shopkeeper pasted.
  */
 export const GEMINI_MODEL: AiModel = DEFAULT_AI_MODEL;
-export const ALLOWED_MODELS: AiModel[] = ["gemini-3.8-flash", "gemini-3.5-flash-lite"];
+export const ALLOWED_MODELS: AiModel[] = ["gemini-3.5-flash-lite", "gemini-3.8-flash"];
 
 export const THINKING_BUDGETS: Record<ThinkingBudget, number> = {
   low: 0,
@@ -95,6 +95,9 @@ export interface ParseLedgerOptions {
  * behind a generic "AI parsing failed".
  */
 export function sanitizeAiErrorDetail(err: unknown): string {
+  // Structured errors carry the raw provider text with them — that is the
+  // detail. Never show the friendly message as its own "Provider said:".
+  if (err instanceof AiError) return err.detail;
   const e = err as { status?: number; code?: string; message?: string } | null;
   const raw = `${e?.status ? `${e.status} ` : ""}${e?.code ? `${e.code}: ` : ""}${e?.message ?? ""}`.trim();
   const redacted = raw
@@ -105,14 +108,38 @@ export function sanitizeAiErrorDetail(err: unknown): string {
   return redacted.slice(0, 300) || "Unknown error";
 }
 
+/**
+ * A failed AI call keeps TWO texts: the friendly message the shopkeeper
+ * sees, and the provider's raw error (its real cause) shown under it.
+ * Before this, the wrappers threw `new Error(friendly message)`, which
+ * destroyed the raw cause — so a real failure showed up as
+ * "AI parsing failed — please try again." with "Provider said:" echoing
+ * the same generic line. That must never happen again.
+ */
+export class AiError extends Error {
+  detail: string;
+  constructor(friendly: string, detail: string) {
+    super(friendly);
+    this.name = "AiError";
+    this.detail = detail;
+  }
+}
+
+/** Wrap any raw failure once: friendly message up front, raw cause kept as detail. */
+export function aiErrorFrom(err: unknown, provider: AiProvider = "gemini"): AiError {
+  if (err instanceof AiError) return err;
+  return new AiError(friendlyAiErrorMessage(err, provider), sanitizeAiErrorDetail(err));
+}
+
 /** Turn a raw provider / network failure into a message a shopkeeper can act on. */
 export function friendlyAiErrorMessage(err: unknown, provider: AiProvider = "gemini"): string {
   const name = provider === "gemini" ? "Gemini" : provider === "openai" ? "OpenAI" : "Claude";
-  const e = err as { status?: number; code?: string; message?: string } | null;
-  const text = `${e?.status ?? ""} ${e?.code ?? ""} ${e?.message ?? ""}`;
   // Already friendly (thrown by our own code): pass it through unchanged
   // instead of re-mapping it into the generic message.
-  if (/Gemini is busy|key was rejected|Could not reach|AI parsing failed|AI output|did not return (valid JSON|a ledger entry)|is not available for this|Voice notes are transcribed|doesn't look like a/i.test(text)) {
+  if (err instanceof AiError) return err.message;
+  const e = err as { status?: number; code?: string; message?: string } | null;
+  const text = `${e?.status ?? ""} ${e?.code ?? ""} ${e?.message ?? ""}`;
+  if (/Gemini is busy|key was rejected|Could not reach|AI parsing failed|AI output|did not return (valid JSON|a ledger entry)|is not available for this|Voice notes are transcribed|doesn't look like a|is overloaded|try again in a moment/i.test(text)) {
     return e?.message ?? "AI parsing failed — please try again.";
   }
   if (isModelNotFoundError(err)) {
@@ -120,6 +147,9 @@ export function friendlyAiErrorMessage(err: unknown, provider: AiProvider = "gem
   }
   if (/429|RESOURCE_EXHAUSTED|rate.?limit|quota/i.test(text)) {
     return `${name} is busy right now (rate limit) — wait a minute and try again.`;
+  }
+  if (/503|502|504|500|UNAVAILABLE|overloaded|overloaded with requests|try again later/i.test(text)) {
+    return `${name} is overloaded right now — try again in a moment.`;
   }
   if (/400|401|403|API_KEY_INVALID|PERMISSION_DENIED|UNAUTHENTICATED|invalid (api )?key|invalid x-api-key|authentication_error/i.test(text)) {
     return `That ${name} API key was rejected — check the key in Settings (your own key, or ask the Admin to restore the host key).`;
@@ -136,10 +166,13 @@ function parseAndRepair(text: string, providerName: string): ParsedLedgerResult 
   try {
     parsed = JSON.parse(text) as unknown;
   } catch {
-    throw new Error(`${providerName} did not return valid JSON.`);
+    // Specific, not generic: the model answered but not in JSON.
+    throw new AiError(`${providerName} did not return valid JSON.`, `${providerName} did not return valid JSON.`);
   }
   const repaired = repairParsedLedgerResult(parsed);
-  if (!repaired.ok || !repaired.result) throw new Error(repaired.error ?? `${providerName} output failed validation.`);
+  // A validation failure is already a specific message — keep it as both
+  // the message and the detail, so the route never re-maps it to generic.
+  if (!repaired.ok || !repaired.result) throw new AiError(repaired.error ?? `${providerName} output failed validation.`, repaired.error ?? `${providerName} output failed validation.`);
   return repaired.result;
 }
 
@@ -170,7 +203,7 @@ export async function parseLedgerWithAi(input: string, opts: ParseLedgerOptions)
     // available") instead of the request landing on a different model.
     text = await generateLedgerGemini(input, opts.apiKey, model, budget);
   } catch (err) {
-    throw new Error(friendlyAiErrorMessage(err, "gemini"));
+    throw aiErrorFrom(err, "gemini");
   }
   return parseAndRepair(text, "Gemini");
 }
@@ -195,14 +228,14 @@ export async function parseLedgerWithProvider(input: string, opts: ProviderParse
     try {
       return { result: await parseLedgerWithOpenAi(input, { apiKey: opts.apiKey, model }), provider: "openai", modelUsed: model };
     } catch (err) {
-      throw new Error(friendlyAiErrorMessage(err, "openai"));
+      throw aiErrorFrom(err, "openai");
     }
   }
   if (opts.provider === "claude") {
     try {
       return { result: await parseLedgerWithClaude(input, { apiKey: opts.apiKey, model }), provider: "claude", modelUsed: model };
     } catch (err) {
-      throw new Error(friendlyAiErrorMessage(err, "claude"));
+      throw aiErrorFrom(err, "claude");
     }
   }
   const result = await parseLedgerWithAi(input, { apiKey: opts.apiKey, model, thinkingBudget: opts.thinkingBudget });
@@ -257,7 +290,7 @@ export async function parseVoiceNoteWithAi(
   } catch (err) {
     // Direct to the configured model only — no silent re-route to another
     // model on 404; the error names the model problem instead.
-    throw new Error(friendlyAiErrorMessage(err, "gemini"));
+    throw aiErrorFrom(err, "gemini");
   }
   const text = res.text ?? "";
   return parseAndRepair(text, "Gemini");

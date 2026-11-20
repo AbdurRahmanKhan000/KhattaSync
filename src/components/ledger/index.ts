@@ -1,4 +1,5 @@
 export { TransactionEntryBar } from "./TransactionEntryBar";
+export { AgentChat } from "./AgentChat";
 export { VoiceRecorder } from "./VoiceRecorder";
 export { LedgerTable } from "./LedgerTable";
 export { CustomerCard } from "./CustomerCard";

@@ -8,19 +8,28 @@
  * (f) repair, don't reject: a wrong derived number is recomputed, not a failure
  * (g) errors name the real cause (model-not-found, key rejected, bad JSON)
  * (h) thinking config: Gemini 3 takes thinkingLevel, Gemini 2 a budget
+ * (i) structured errors: the friendly message and the raw provider cause
+ *     are kept apart — a failure never again echoes the generic line as
+ *     its own "Provider said:" detail
+ * (j) default Gemini model is the lightweight gemini-3.5-flash-lite
+ * (k) the AI Agent: prompt carries the live snapshot, replies parse into
+ *     answer / clarify / save_entry, and an un-saveable entry becomes a
+ *     question instead of a failure
  * No live AI call is made: the host key is empty in this repo, so a
  * real model call would need a key the test must never contain.
  */
 import "fake-indexeddb/auto";
-import { LEDGER_RESPONSE_SCHEMA, friendlyAiErrorMessage, getGeminiClient, isModelNotFoundError, resolveAiKey, sanitizeAiErrorDetail, thinkingConfigFor } from "../src/lib/ai/index.js";
+import { aiErrorFrom, LEDGER_RESPONSE_SCHEMA, friendlyAiErrorMessage, getGeminiClient, isModelNotFoundError, resolveAiKey, sanitizeAiErrorDetail, thinkingConfigFor } from "../src/lib/ai/index.js";
 import { detectProvider, modelForProvider, providerSupportsVoiceAudio } from "../src/lib/ai/providers.js";
+import { buildAgentPrompt, parseAgentReply } from "../src/lib/ai/agent.js";
+import { AGENT_REPLY_SCHEMA } from "../src/lib/ai/agent-schema.js";
 import {
   DEFAULT_ADMIN_PASSWORD_HASH, containsPromptInjection, hashAdminPassword,
   isLedgerQuery, isOffTopic, rejectedResult, repairParsedLedgerResult, validateParsedLedgerResult, verifyAdminPassword,
 } from "../src/lib/security/index.js";
 import { answerLedgerQuery } from "../src/lib/ledger-query.js";
 import { getAdminConfig, saveAdminConfig } from "../src/lib/db/index.js";
-import { ERROR_MESSAGES } from "../src/constants/index.js";
+import { ERROR_MESSAGES, DEFAULT_AI_MODEL } from "../src/constants/index.js";
 import type { ParsedLedgerResult } from "../src/types/index.js";
 
 let failures = 0;
@@ -129,8 +138,8 @@ async function main(): Promise<void> {
 
   // (d) Unlock -> toggle BYOK + model, persisted in IndexedDB.
   const before = await getAdminConfig();
-  check("(d) Default admin: host key on, gemini-3.8-flash",
-    before.hostKeyWithdrawn === false && before.model === "gemini-3.8-flash");
+  check("(d) Default admin: host key on, gemini-3.5-flash-lite",
+    before.hostKeyWithdrawn === false && before.model === "gemini-3.5-flash-lite");
   await saveAdminConfig({
     ...before, hostKeyWithdrawn: true, model: "gemini-3.5-flash-lite",
     thinkingBudget: "low", maxDailyEntries: 50, audioTranscriptionEnabled: false, sampleDataLocked: true,
@@ -147,7 +156,7 @@ async function main(): Promise<void> {
   check("(d) Host allowed + server key => host",
     resolveAiKey({ hostKeyAllowed: true, serverKey: "host-key" }).mode === "host");
   // Restore defaults so the test leaves a clean local DB.
-  await saveAdminConfig({ ...before, hostKeyWithdrawn: false, model: "gemini-3.8-flash" });
+  await saveAdminConfig({ ...before, hostKeyWithdrawn: false, model: "gemini-3.5-flash-lite" });
 
   // (e) Multi-provider: one key bar, provider detected from the key itself.
   check("(e) Gemini key detected", detectProvider("AIzaSyAbc123") === "gemini");
@@ -166,7 +175,7 @@ async function main(): Promise<void> {
   check("(e) Model for provider falls back when the stored model belongs to another provider",
     modelForProvider("openai", "gemini-3.8-flash") === "gpt-4o-mini");
   check("(e) Model defaults per provider",
-    modelForProvider("gemini") === "gemini-3.8-flash" && modelForProvider("claude") === "claude-haiku-4-5");
+    modelForProvider("gemini") === "gemini-3.5-flash-lite" && modelForProvider("claude") === "claude-haiku-4-5");
   check("(e) Only Gemini takes raw voice audio",
     providerSupportsVoiceAudio("gemini") && !providerSupportsVoiceAudio("openai") && !providerSupportsVoiceAudio("claude"));
   check("(e) BYOK Gemini key resolves with provider gemini",
@@ -222,6 +231,60 @@ async function main(): Promise<void> {
     !sanitizeAiErrorDetail(new Error("401: API key not valid. AQ.Ab8RN6IxkvazkDr16g5K123456")).includes("AQ.Ab8RN6IxkvazkDr16g5K123456"));
   check("(g) Error detail keeps the provider's own words",
     sanitizeAiErrorDetail(new Error("404: models/gemini-3.8-flash is not found")).includes("is not found"));
+  check("(g) 503 overloaded says so, not generic failure",
+    friendlyAiErrorMessage({ status: 503, message: "The model is overloaded. Please try again later." }, "gemini").includes("overloaded"));
+  check("(g) 500 server error says busy, not generic failure",
+    friendlyAiErrorMessage({ status: 500, message: "Internal error" }, "gemini").includes("overloaded"));
+
+  // (i) Structured errors: friendly message up front, raw cause kept as detail.
+  const aqRaw = new Error('{"error":{"code":401,"message":"API key not valid.","status":"UNAUTHENTICATED","details":[{"reason":"ACCESS_TOKEN_TYPE_UNSUPPORTED"}]}}');
+  (aqRaw as { status?: number }).status = 401;
+  const aqErr = aiErrorFrom(aqRaw, "gemini");
+  check("(i) AiError keeps the friendly message",
+    aqErr.message.includes("was rejected"));
+  check("(i) AiError keeps the raw provider reason as detail",
+    aqErr.detail.includes("ACCESS_TOKEN_TYPE_UNSUPPORTED"));
+  check("(i) Friendly message and detail are never the same generic line",
+    aqErr.message !== aqErr.detail && !aqErr.detail.includes("AI parsing failed"));
+  check("(i) sanitizeAiErrorDetail returns the AiError detail",
+    sanitizeAiErrorDetail(aqErr).includes("ACCESS_TOKEN_TYPE_UNSUPPORTED"));
+  check("(i) friendlyAiErrorMessage passes an AiError through unchanged",
+    friendlyAiErrorMessage(aqErr, "gemini") === aqErr.message);
+  const validationErr = aiErrorFrom(new Error("AI output has an invalid item."), "gemini");
+  check("(i) A validation failure stays specific, never generic",
+    validationErr.message.includes("invalid item") && !validationErr.message.includes("AI parsing failed"));
+
+  // (j) The default Gemini model is the lightweight one.
+  check("(j) DEFAULT_AI_MODEL is gemini-3.5-flash-lite",
+    DEFAULT_AI_MODEL === "gemini-3.5-flash-lite");
+  check("(j) Lite is first in the Gemini model list",
+    modelForProvider("gemini", undefined) === "gemini-3.5-flash-lite");
+
+  // (k) The AI Agent: prompt carries the live snapshot; replies parse.
+  const snapshot = { customers: [{ name: "Bibi Zainab", balance: 3200 }], totalUdhaar: 3200, collectedToday: 200, totalCustomers: 1 };
+  const prompt = buildAgentPrompt("What does Bibi Zainab owe?", [], snapshot);
+  check("(k) Agent prompt carries the snapshot balances",
+    prompt.includes("Bibi Zainab") && prompt.includes("3200"));
+  const agentSave = parseAgentReply(JSON.stringify({
+    reply: "Saved: Zainab took Rs 300 on credit.",
+    intent: "save_entry",
+    entry: { ...VALID_SALE, customer_name: "Bibi Zainab", total_amount: 300, amount_paid: 0, credit_balance_change: 300, items: [{ name: "udhaar", quantity: 1, amount: 300 }] },
+  }));
+  check("(k) Agent save_entry parses and repairs into a saveable entry",
+    agentSave.intent === "save_entry" && agentSave.entry?.total_amount === 300);
+  const agentClarify = parseAgentReply(JSON.stringify({ reply: "One question first:", intent: "clarify", entry: null }));
+  check("(k) Agent clarify parses with no entry",
+    agentClarify.intent === "clarify" && agentClarify.entry === null);
+  const agentBadEntry = parseAgentReply(JSON.stringify({
+    reply: "Got it.",
+    intent: "save_entry",
+    entry: { ...VALID_SALE, customer_name: "", total_amount: 300 },
+  }));
+  check("(k) Agent un-saveable entry becomes a question, not a failure",
+    agentBadEntry.intent === "clarify" && agentBadEntry.entry === null && /Who is this for/.test(agentBadEntry.reply));
+  check("(k) Agent reply schema requires reply + intent",
+    (AGENT_REPLY_SCHEMA.required as readonly string[]).includes("reply") &&
+    (AGENT_REPLY_SCHEMA.required as readonly string[]).includes("intent"));
 
   // (h) Thinking config: Gemini 3 takes thinkingLevel, Gemini 2 takes a budget.
   const level3 = thinkingConfigFor("gemini-3.8-flash", "low").thinkingConfig as { thinkingLevel?: string };

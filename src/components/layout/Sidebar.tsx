@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, LayoutDashboard, Plus, Search, Settings, Users, X } from "lucide-react";
+import { BookOpen, Bot, LayoutDashboard, Plus, Search, Settings, Users, X } from "lucide-react";
 import { formatPKR } from "@/lib/utils";
 import { notifyDataChanged, useDashboard } from "./DashboardContext";
 import { createCustomer } from "@/lib/db";
@@ -10,6 +10,7 @@ import { NewCustomerModal } from "@/components/ledger";
 
 const NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/agent", label: "AI Agent", icon: Bot },
   { href: "/customers", label: "Customers", icon: Users },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

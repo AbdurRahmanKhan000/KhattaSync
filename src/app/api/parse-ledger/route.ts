@@ -9,23 +9,29 @@ import {
   resolveAiKey,
   sanitizeAiErrorDetail,
 } from "@/lib/ai";
+import { agentReplyWithProvider, type AgentHistoryItem, type LedgerSnapshot } from "@/lib/ai/agent";
 import { PROVIDER_LABELS, modelForProvider, providerSupportsVoiceAudio, type AiProvider } from "@/lib/ai/providers";
 import { ERROR_MESSAGES } from "@/constants";
 import type { ThinkingBudget } from "@/types";
 
 /**
- * POST /api/parse-ledger — the ONLY AI entry point. Structured ledger engine, NOT a chatbot.
- * Body: { input, action?: "parse" | "reminder" | "voice" | "ping", apiKey?: string (BYOK, per-request only),
+ * POST /api/parse-ledger — the ONLY AI entry point. Structured ledger engine + conversational agent.
+ * Body: { input, action?: "parse" | "reminder" | "voice" | "ping" | "agent", apiKey?: string (BYOK, per-request only),
  *         hostKeyAllowed?: boolean, model?: string, thinkingBudget?: ThinkingBudget,
  *         customerName?: string, balance?: number, language?: "en" | "ur",
- *         audio?: string (base64 voice note, action "voice"), mimeType?: string }
- * One key bar accepts a Gemini (AIza…), OpenAI (sk-…), or Claude (sk-ant-…) key;
+ *         audio?: string (base64 voice note, action "voice"), mimeType?: string,
+ *         history?: [{ role: "user" | "agent", text: string }], snapshot?: { customers: [{ name, balance }], totalUdhaar, collectedToday, totalCustomers } }
+ * One key bar accepts a Gemini (AIza… or AQ.…), OpenAI (sk-…), or Claude (sk-ant-…) key;
  * the provider is detected from the key itself, server-side. The server
  * GEMINI_API_KEY is never sent to the browser. The user key, if supplied, is
  * used for this request only and never stored server-side. Audio is sent to
  * Gemini for transcription + parsing in that request only and is never stored.
  * Failures return a friendly message AND a `detail` string with the
  * provider's own error text — a failure must never again hide its real cause.
+ * The "agent" action is the conversational layer: it answers from the
+ * snapshot the app sends (never from a server database — there is none),
+ * asks one short question when information is missing, and returns a
+ * structured entry only when it is complete enough to save.
  */
 export async function POST(req: NextRequest) {
   let providerForError: AiProvider | null = null;
@@ -33,12 +39,13 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as {
       input?: unknown; action?: unknown; apiKey?: unknown; hostKeyAllowed?: unknown;
       model?: unknown; thinkingBudget?: unknown; customerName?: unknown; balance?: unknown; language?: unknown;
-      audio?: unknown; mimeType?: unknown;
+      audio?: unknown; mimeType?: unknown; history?: unknown; snapshot?: unknown;
     };
     const action =
       body.action === "reminder" ? "reminder"
       : body.action === "voice" ? "voice"
       : body.action === "ping" ? "ping"
+      : body.action === "agent" ? "agent"
       : "parse";
     const input = typeof body.input === "string" ? body.input.trim() : "";
     if (action !== "voice" && action !== "ping" && !input) {
@@ -47,17 +54,21 @@ export async function POST(req: NextRequest) {
 
     // Gate 1 + 2: injection and domain, before any AI call.
     // (Voice notes have no input text — their content is judged by the
-    // model + server validation in the voice branch below.)
+    // model + server validation in the voice branch below. The agent has
+    // its own guardrail — it answers ledger questions, asks for missing
+    // information, and redirects off-topic asks — so the parse gates do
+    // not apply to it; only the injection gate does.)
     if (action !== "voice" && action !== "ping" && containsPromptInjection(input)) {
       return NextResponse.json({ ok: false, error: ERROR_MESSAGES.ledgerOnly, parsed: rejectedResult(ERROR_MESSAGES.ledgerOnly) });
     }
-    if (action !== "voice" && action !== "ping" && isOffTopic(input)) {
+    if (action !== "voice" && action !== "ping" && action !== "agent" && isOffTopic(input)) {
       return NextResponse.json({ ok: false, error: ERROR_MESSAGES.ledgerOnly, parsed: rejectedResult(ERROR_MESSAGES.ledgerOnly) });
     }
 
     // Balance questions are answered from the local ledger in the app —
-    // no AI call is needed, so never send one to any provider.
-    if (action !== "voice" && action !== "ping" && isLedgerQuery(input)) {
+    // no AI call is needed, so never send one to any provider. (The agent
+    // action is the exception: it answers from the snapshot on purpose.)
+    if (action !== "voice" && action !== "ping" && action !== "agent" && isLedgerQuery(input)) {
       const message = "That's a question about your ledger — the app answers it instantly from your local khata, no AI call needed.";
       return NextResponse.json({ ok: false, error: message, parsed: rejectedResult(message) });
     }
@@ -105,6 +116,36 @@ export async function POST(req: NextRequest) {
           model,
         });
       }
+    }
+
+    if (action === "agent") {
+      // Conversational agent: answers from the snapshot, asks for missing
+      // information, returns a structured entry only when it is complete.
+      // The snapshot is the app's own ledger data, sent per-request only;
+      // the server stores nothing.
+      const history: AgentHistoryItem[] = Array.isArray(body.history)
+        ? (body.history as { role?: unknown; text?: unknown }[])
+          .filter((h) => (h.role === "user" || h.role === "agent") && typeof h.text === "string")
+          .slice(-8)
+          .map((h) => ({ role: h.role as "user" | "agent", text: (h.text as string).slice(0, 500) }))
+        : [];
+      const snap = (body.snapshot ?? {}) as { customers?: unknown; totalUdhaar?: unknown; collectedToday?: unknown; totalCustomers?: unknown };
+      const snapshot: LedgerSnapshot = {
+        customers: Array.isArray(snap.customers)
+          ? (snap.customers as { name?: unknown; balance?: unknown }[])
+            .filter((c) => typeof c.name === "string")
+            .slice(0, 50)
+            .map((c) => ({ name: (c.name as string).slice(0, 80), balance: typeof c.balance === "number" && Number.isFinite(c.balance) ? c.balance : 0 }))
+          : [],
+        totalUdhaar: typeof snap.totalUdhaar === "number" && Number.isFinite(snap.totalUdhaar) ? snap.totalUdhaar : 0,
+        collectedToday: typeof snap.collectedToday === "number" && Number.isFinite(snap.collectedToday) ? snap.collectedToday : 0,
+        totalCustomers: typeof snap.totalCustomers === "number" && Number.isFinite(snap.totalCustomers) ? snap.totalCustomers : 0,
+      };
+      const agentReply = await agentReplyWithProvider(input, history, snapshot, opts);
+      return NextResponse.json({
+        ok: true, keyMode: resolved.mode, provider, model,
+        reply: agentReply.reply, intent: agentReply.intent, entry: agentReply.entry,
+      });
     }
 
     if (action === "voice") {

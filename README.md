@@ -10,15 +10,16 @@ Neighbourhood shops run on credit. A shopkeeper keeps a paper notebook of who to
 
 ## What it does
 
-- **Quick Record (text + voice)** — type or dictate an entry in English, Urdu, Pashto, or Roman Urdu. Your AI key (Gemini, OpenAI, or Claude — one bar takes any of them) parses it into a strict JSON ledger entry (customer, items, total, paid, credit change) in 1–2 seconds.
-- **Customer Ledgers (Khata)** — one running balance per customer, with search, *Lena Hai* (receivable) vs *Dena Hai* (payable) totals, and per-customer filtering. Never labelled "Chats" — this is not a chat app.
+- **Quick Record (text + voice)** — type or dictate an entry in English, Urdu, Pashto, or Roman Urdu. Your AI key (Gemini, OpenAI, or Claude — one bar takes any of them) parses it into a strict JSON ledger entry (customer, items, total, paid, credit change) in 1–2 seconds. If the entry has no amount yet, the agent asks for the missing price instead of blocking you.
+- **AI Agent** — a real conversation with your khata (sidebar → AI Agent). Ask anything ("What does Bibi Zainab owe?"), or just say what happened ("Ahmad bought one kilo onion, will pay in 3 days") — Gemini answers from your live balances, asks one short question when something is missing, and saves the entry the moment it is complete. It only knows your khata: answers come from the ledger snapshot in this browser, never invented, and off-topic asks get the ledger-only reply.
+- **Customer Ledgers (Khata)** — one running balance per customer, with search, *Lena Hai* (receivable) vs *Dena Hai* (payable) totals, and per-customer filtering.
 - **Ledger table** — filterable history with item breakdowns, timestamps, paid vs credit badges, and one-tap **Mark Paid** (posts the matching payment and settles the entry).
 - **WhatsApp reminders** — one click drafts a polite Urdu/English reminder with Gemini and opens `wa.me` with the message ready, or copies it to the clipboard. Nothing is ever sent automatically.
 - **Backup** — export / import the whole khata as a validated versioned JSON file, or wipe local data from Settings. The file only moves if the user downloads or shares it themselves.
 
 ## Stack
 
-Next.js 16 (App Router) · TypeScript (strict) · Tailwind CSS 4 · React 19 · `@google/genai` ^3.6.1 (official Google Gen AI SDK — **not** the legacy `@google/generative-ai`) · `lucide-react` · `idb` (IndexedDB) · AI providers: Gemini `gemini-3.8-flash` (default) / `gemini-3.5-flash-lite`, OpenAI `gpt-4o-mini` (default) / `gpt-4o`, Claude `claude-haiku-4-5` (default) / `claude-sonnet-5`
+Next.js 16 (App Router) · TypeScript (strict) · Tailwind CSS 4 · React 19 · `@google/genai` ^3.6.1 (official Google Gen AI SDK — **not** the legacy `@google/generative-ai`) · `lucide-react` · `idb` (IndexedDB) · AI providers: Gemini `gemini-3.5-flash-lite` (default — the lightest, fastest model; this khata's short structured parses do not need a larger one) / `gemini-3.8-flash`, OpenAI `gpt-4o-mini` (default) / `gpt-4o`, Claude `claude-haiku-4-5` (default) / `claude-sonnet-5`
 
 > **Model note:** `gemini-2.5-flash` was deliberately removed from the selector — Google retires it on 1 December 2026 and already restricts it on fresh projects.
 
@@ -41,7 +42,8 @@ Browser (the whole ledger)                     Server (stateless, no storage)
 │  ├─ Sidebar: Customer Ledgers    │  fetch    │  ├─ Gate 1 injection filter     │
 │  ├─ KPI header (live totals)     │ ────────► │  ├─ Gate 2 ledger-only filter   │
 │  ├─ Quick-Record bar (voice/text)│  JSON     │  ├─ resolveAiKey (BYOK > host)  │
-│  └─ Ledger table + reminder      │ ◄──────── │  └─ Gemini Structured Outputs   │
+│  ├─ AI Agent chat (voice/text)   │ ◄──────── │  ├─ parse / voice / agent       │
+│  └─ Ledger table + reminder      │           │  └─ Gemini Structured Outputs   │
 │     drawer                       │           │     + server output validation  │
 │ IndexedDB khattasync_local_db    │           │ GET  /api/health (aiKeyConfigured│
 │  customers · transactions ·      │           │      boolean only — never a key) │
@@ -53,11 +55,11 @@ Browser (the whole ledger)                     Server (stateless, no storage)
 Key design decisions:
 
 - **The server is stateless and storage-free.** API routes never import the DB layer, never write a file, and never log request data. Ledger data exists in exactly one place: the user's own IndexedDB.
-- **KhattaSync is a structured ledger engine, not a chatbot.** There is no chat-bubble UI and no open-ended conversation. Every AI request passes three gates: (1) prompt-injection filter, (2) ledger-only domain filter, (3) structured output + server-side repair (Gemini Structured Outputs `responseJsonSchema`, OpenAI `json_schema`, Claude forced tool use; then the server recomputes derived amounts — a payment gets total = paid and change = −paid, a sale gets change = total − paid, and an itemised sum that is usable becomes the total — instead of rejecting the whole entry over one wrong derived number. Structural problems — missing customer, bad action, non-PKR — still reject with a specific error).
+- **KhattaSync is a structured ledger engine — and the agent is its voice.** The fast path (Quick Record) and the conversational path (AI Agent, `src/app/agent/`) share one engine: the same provider routing, the same strict schema, the same server-side repair + validation, and the same save code (`src/lib/ledger-save.ts`). The agent is ledger-scoped, not a general chatbot: it answers only from the ledger snapshot the app sends per request (customers + balances it already knows — the server has no database), asks one short question when information is missing, and returns a structured entry only when it is complete enough to save. Off-topic asks get the ledger-only message. Every AI request passes the gates: (1) prompt-injection filter, (2) ledger-only domain filter on the fast path (the agent enforces the same rule in its own replies), (3) structured output + server-side repair (Gemini Structured Outputs `responseJsonSchema`, OpenAI `json_schema`, Claude forced tool use; then the server recomputes derived amounts — a payment gets total = paid and change = −paid, a sale gets change = total − paid, and an itemised sum that is usable becomes the total — instead of rejecting the whole entry over one wrong derived number. Structural problems — missing customer, bad action, non-PKR — still reject with a specific error).
 - **Off-topic is blocked before any Gemini call**, with the exact message: *"KhattaSync only processes shop sales, customer credit (udhaar), and payment records."* Blocked examples (all verified live): *"Write me a poem"*, *"Solve 2x+5=10"*, *"Ignore previous instructions"*, *"Tell me a joke"*, *"What is the capital of France?"*, *"Write an essay on climate change"*.
 - **Application-level outcomes return HTTP 200 with `ok: false`** (blocked prompt, no key, rejected key, AI failure). A rejected prompt is an expected app outcome, not a transport failure — a 4xx/5xx would make Chromium log a console error for a request the app already handled gracefully.
 - **Shared state, no prop-drilling:** `DashboardContext` (in `src/components/layout/`) loads customers/transactions/settings/admin config once from IndexedDB after mount (server render stays empty/skeleton, so there is no hydration mismatch) and every writer — Quick Record, Mark Paid, New Customer, sample-data loader, backup import/clear — notifies it via a `khattasync:data-changed` event so sidebar, KPIs, and table refresh together.
-- **Resilience:** route-level (`src/app/error.tsx`) and root (`src/app/global-error.tsx`) error boundaries — a crash in one page never takes down the khata. AI failures are mapped to messages a shopkeeper can act on, and the provider's own error text is returned as `detail` and shown under the message — a failure never again hides behind a bare "AI parsing failed": rate limit → *"Gemini is busy right now (rate limit) — wait a minute and try again."*; rejected key → *"That Gemini API key was rejected — check the key in Settings…"*; model not available → *"That AI model is not available for this key — pick another model in Settings…"*; network failure → *"Could not reach Gemini — check your internet connection and try again."* If Gemini says a model is not available, the error says so — every request goes directly to the model shown in Settings, never silently re-routed to another model.
+- **Resilience:** route-level (`src/app/error.tsx`) and root (`src/app/global-error.tsx`) error boundaries — a crash in one page never takes down the khata. AI failures are mapped to messages a shopkeeper can act on, and the provider's own error text is returned as `detail` and shown under the message — a failure never again hides behind a bare "AI parsing failed": rate limit → *"Gemini is busy right now (rate limit) — wait a minute and try again."*; rejected key → *"That Gemini API key was rejected — check the key in Settings…"*; model not available → *"That AI model is not available for this key — pick another model in Settings…"*; overloaded (503) → *"Gemini is overloaded right now — try again in a moment."*; network failure → *"Could not reach Gemini — check your internet connection and try again."* Every failure keeps two texts — the friendly message and the provider's raw error as `detail` (an `AiError` carries both through the whole call chain), so "Provider said:" always shows the real cause. If Gemini says a model is not available, the error says so — every request goes directly to the model shown in Settings, never silently re-routed to another model.
 
 ## Folder structure
 
@@ -66,18 +68,19 @@ src/
   app/
     layout.tsx            Root layout — renders <AppShell>
     page.tsx              Dashboard: KPI header, Quick Record, ledger table
+    agent/page.tsx        AI Agent chat (voice/text) — talks to Gemini
     customers/page.tsx    Customer cards (live data) + reminders
     settings/page.tsx     API key, backup, Admin Vault, DB self-test
     error.tsx             Route-level error boundary
     global-error.tsx      Root error boundary
     api/
       health/route.ts     GET { ok, service, aiKeyConfigured } (boolean only)
-      parse-ledger/route.ts   POST — the only AI entry point (parse + reminder)
+      parse-ledger/route.ts   POST — the only AI entry point (parse + reminder + voice + ping + agent)
       ai/parse-entry/route.ts POST — legacy wrapper, same strict parser
   components/
     layout/               AppShell, DashboardContext, Sidebar, Topbar,
                           KpiHeader, ApiModeBadge, StatusBadge
-    ledger/               TransactionEntryBar, VoiceRecorder, LedgerTable,
+    ledger/               TransactionEntryBar, AgentChat, VoiceRecorder, LedgerTable,
                           CustomerCard, WhatsAppReminderModal, NewCustomerModal
     settings/             ApiKeySettings, DataExportImport, AdminVault
     shared/               Toast, Skeleton, ConfirmDialog, DemoLoader
@@ -85,7 +88,11 @@ src/
     db/                   IndexedDB: schema, core, customers, transactions,
                           entry-logs, settings, backup, seed, self-test
     ai/                   Gemini client, strict schema, key resolution,
-                          friendly error mapping
+                          friendly error mapping, AI Agent (agent.ts +
+                          agent-schema.ts; OpenAI/Claude agent calls in
+                          openai.ts / claude.ts)
+    agent-client.ts       Shared browser call to the agent endpoint
+    ledger-save.ts        The one save path for a parsed entry (bar + agent)
     security/             SHA-256 admin password, injection + off-topic
                           filters, output validation
     utils/                PKR formatting, WhatsApp links, reminder templates
@@ -95,8 +102,8 @@ src/
                           models, limits, error messages
 scripts/
   verify-db.ts            IndexedDB checks (14 checks)
-  verify-ai.ts            AI + Admin checks (27 checks)
-  verify-audit.ts         End-to-end audit (30 checks, needs a running server)
+  verify-ai.ts            AI + Admin checks (99 checks)
+  verify-audit.ts         End-to-end audit (47 checks, needs a running server)
 docs/
   ui-ux-research.md       Step 1 UI/UX research summary
 ```
@@ -119,7 +126,7 @@ The **Admin Control Vault** lives in Settings, behind a password gate. The defau
 Unlocked, the Admin controls:
 
 1. **Withdraw / toggle host API key** — instantly disables the server `.env` key fallback and enforces **User BYOK Mode**: users must enter their own AI key (Gemini, OpenAI, or Claude) in Settings to run AI parsing.
-2. **Model & speed** — the model list follows the provider of the key in use (Gemini: `gemini-3.8-flash` default ↔ `gemini-3.5-flash-lite`; OpenAI: `gpt-4o-mini` ↔ `gpt-4o`; Claude: `claude-haiku-4-5` ↔ `claude-sonnet-5`), and the thinking budget (low / standard / high, Gemini only — Gemini 3 models use `thinkingLevel`, not `thinkingBudget`).
+2. **Model & speed** — the model list follows the provider of the key in use (Gemini: `gemini-3.5-flash-lite` default ↔ `gemini-3.8-flash`; OpenAI: `gpt-4o-mini` ↔ `gpt-4o`; Claude: `claude-haiku-4-5` ↔ `claude-sonnet-5`), and the thinking budget (low / standard / high, Gemini only — Gemini 3 models use `thinkingLevel`, not `thinkingBudget`).
 3. **Strictness & quota** — max AI entries per browser session, audio-transcription toggle, sample-data lock, and password change.
 
 **One key bar, three providers.** Settings takes a Gemini key (`AIza…` or the current `AQ.…` auth keys Google AI Studio has issued since May 28, 2026), an OpenAI key (`sk-…` / `sk-proj-…`), or a Claude key (`sk-ant-…`) in the same field. The provider is detected from the key itself, shown live as you type, and the dashboard badge shows it (`Personal User API Key · OpenAI`). A **Test this key** button pings the provider and reports the result — or the provider's own error — before you save. Voice notes are transcribed by Gemini only: with an OpenAI or Claude key the mic switches to live speech transcription, which types the entry for the same AI to parse.
@@ -173,15 +180,16 @@ The same rule applies everywhere: the key is a server-side environment variable.
 
 ```bash
 npm run verify:db      # 14 IndexedDB checks — CRUD, balances, export/import, seed
-npm run verify:ai      # 27 AI + Admin checks — strict JSON, off-topic blocked,
-                       #   vault passwords, BYOK/model resolution
-npm run verify:audit   # 30 end-to-end audit checks — needs a running server:
+npm run verify:ai      # 99 AI + Admin checks — strict JSON, off-topic blocked,
+                       #   vault passwords, BYOK/model resolution, structured
+                       #   errors, lite default, agent prompt/reply parsing
+npm run verify:audit   # 47 end-to-end audit checks — needs a running server:
                        #   BASE_URL=http://localhost:3000 npm run verify:audit
 npm run verify:all     # all three, in order
 npx tsc --noEmit && npm run lint && npm run build
 ```
 
-The audit script (`scripts/verify-audit.ts`) checks, live against the production server: 7 off-topic/injection prompts blocked with the exact ledger-only message; no `NEXT_PUBLIC_GEMINI_API_KEY` in source; the string `GEMINI_API_KEY` absent from all client bundle chunks; server code writes no files, logs no request data, and never touches IndexedDB; the Vault rejects wrong/wrong-case passwords and unlocks with the correct one; 429 / invalid-key / network failures map to friendly messages; and the multi-provider checks — OpenAI and Claude fake keys are rejected naming their provider, an unknown key is refused plainly, a voice note with Chrome's `audio/webm;codecs=opus` type reaches Gemini, and the ping action returns the provider's own error as `detail`. The browser audit (headless Chromium, desktop + mobile) additionally verified: fresh-profile isolation, Vault unlock + host-key withdrawal persisting across reload, BYOK badge switching, a live invalid-key rejection showing the friendly message with zero console errors, and IndexedDB reads at ~2 ms.
+The audit script (`scripts/verify-audit.ts`) checks, live against the production server: 7 off-topic/injection prompts blocked with the exact ledger-only message; no `NEXT_PUBLIC_GEMINI_API_KEY` in source; the string `GEMINI_API_KEY` absent from all client bundle chunks; server code writes no files, logs no request data, and never touches IndexedDB; the Vault rejects wrong/wrong-case passwords and unlocks with the correct one; 429 / invalid-key / network failures map to friendly messages; and the multi-provider checks — OpenAI and Claude fake keys are rejected naming their provider, an unknown key is refused plainly, a voice note with Chrome's `audio/webm;codecs=opus` type reaches Gemini, and the ping action returns the provider's own error as `detail`. The structured-error checks prove a failed parse now carries the provider's own error (e.g. `ACCESS_TOKEN_TYPE_UNSUPPORTED` for a bad AQ key) as `detail`, never the generic line echoed back; the agent checks prove the agent action routes through the same providers and fails the same honest way. The browser audit (headless Chromium, desktop + mobile) additionally verified: fresh-profile isolation, Vault unlock + host-key withdrawal persisting across reload, BYOK badge switching, a live invalid-key rejection showing the friendly message with zero console errors, and IndexedDB reads at ~2 ms.
 
 ## Status & limits (honest notes)
 
