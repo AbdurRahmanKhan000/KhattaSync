@@ -40,3 +40,17 @@ npx tsc --noEmit
 npm run lint
 npm run build
 ```
+
+## Persistence (Prompt 2)
+- **Database:** IndexedDB only, `khattasync_local_db` — no server DB.
+  Stores: `customers`, `transactions`, `entry_logs`, `app_settings`.
+  Each browser profile has its own database, so hackathon users never see
+  each other's data. Code: `src/lib/db/` (`schema`, `core`, `customers`,
+  `transactions`, `entry-logs`, `settings`, `backup`, `seed`, `self-test`).
+- **Sample data:** "Load Sample Shop Data" (`src/constants/` Peshawar
+  grocery store, 6 customers / 10 transactions) writes only to the local DB.
+- **Backup:** Settings → Export JSON backup / Import JSON backup (validated,
+  version 1) / Clear My Local Data (this browser only).
+- **Verify:** `npm run verify:db` (fake-indexeddb CRUD + balance + export/import),
+  plus the in-app self-test on the Settings page.
+  `npm run verify:db` runs `tsx scripts/verify-db.ts`.

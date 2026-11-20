@@ -4,6 +4,7 @@ export type EntryStatus = "credit" | "paid" | "due" | "partial";
 export type EntryType = "gave" | "got";
 export type EntrySource = "text" | "voice" | "manual";
 
+/** One ledger line. Stored in the `transactions` IndexedDB store. */
 export interface LedgerEntry {
   id: string;
   customerId: string;
@@ -21,6 +22,9 @@ export interface LedgerEntry {
   rawInput?: string;
 }
 
+/** Alias: a transaction IS a ledger entry in KhattaSync. */
+export type Transaction = LedgerEntry;
+
 export interface CustomerAccount {
   id: string;
   name: string;
@@ -33,15 +37,33 @@ export interface CustomerAccount {
   isOverdue: boolean;
 }
 
+export type EntryLogStatus = "parsed" | "failed" | "pending";
+
+/** One past voice/text command, kept in the `entry_logs` store. */
+export interface EntryLog {
+  id: string;
+  rawInput: string;
+  source: EntrySource;
+  status: EntryLogStatus;
+  customerName?: string;
+  amount?: number;
+  transactionId?: string;
+  error?: string;
+  createdAt: string;
+}
+
 export interface UserSettings {
   shopName: string;
   ownerName: string;
   currency: "PKR";
   language: "en" | "ur";
-  /** User-supplied Gemini key, stored only in this browser (IndexedDB). Never sent to our servers except to the Gemini API route the user explicitly calls. */
+  /** User-supplied Gemini key, stored only in this browser (IndexedDB). */
   geminiApiKey?: string;
   demoDataLoaded: boolean;
 }
+
+/** Stored in `app_settings` under id "app". */
+export type AppSettings = UserSettings & { id: string };
 
 export interface AdminConfig {
   vaultEnabled: boolean;
@@ -57,4 +79,22 @@ export interface ParsedLedgerInput {
   note?: string;
   date?: string;
   confidence: number;
+}
+
+/** Whole-khata JSON backup (export / import). Versioned, so imports can be rejected safely. */
+export interface BackupData {
+  version: 1;
+  app: "KhattaSync";
+  exportedAt: string;
+  ownerScope: string;
+  customers: CustomerAccount[];
+  transactions: LedgerEntry[];
+  entryLogs: EntryLog[];
+  settings: AppSettings | null;
+}
+
+export interface DbSelfTestResult {
+  name: string;
+  passed: boolean;
+  detail: string;
 }

@@ -1,5 +1,6 @@
 import { Topbar } from "@/components/layout";
 import { AdminVault, ApiKeySettings, DataExportImport } from "@/components/settings";
+import { DbSelfTest } from "@/components/shared";
 
 export default function SettingsPage() {
   return (
@@ -9,6 +10,7 @@ export default function SettingsPage() {
         <ApiKeySettings />
         <DataExportImport />
         <AdminVault />
+        <DbSelfTest />
       </div>
     </div>
   );
