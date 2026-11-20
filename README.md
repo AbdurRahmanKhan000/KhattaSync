@@ -137,7 +137,7 @@ Unlocked, the Admin controls:
 2. **Host Hosted Key** (server `GEMINI_API_KEY` from `.env`) — only if the Admin has not withdrawn it.
 3. **None** — AI parsing is off; the UI says so and guides the user to Settings.
 
-The dashboard and Settings always show which mode is live: **Host Hosted Key** / **Personal User API Key** / **No AI Key**. The mode is computed honestly: `/api/health` reports only a boolean `aiKeyConfigured` — the server never tells the browser whether a key exists beyond that, and never exposes the key itself. There is **no `NEXT_PUBLIC_` Gemini key anywhere** (verified in source and in the built client bundles).
+The dashboard and Settings always show which mode is live: **Host Hosted Key** / **Personal User API Key** / **No AI Key**. The mode is computed honestly: `/api/health` reports only a boolean `aiKeyConfigured` — the server never tells the browser whether a key exists beyond that, and never exposes the key itself. Both badges read the same shared mode, so Settings can never claim "Host Hosted Key" on a deployment where the server has no key configured (an earlier Settings-only computation did exactly that — fixed so the badge, the agent, and the route all agree). There is **no `NEXT_PUBLIC_` Gemini key anywhere** (verified in source and in the built client bundles).
 
 > **Security note:** a personal (BYOK) key is stored in the user's own IndexedDB and sent to the app's own server on each parse request, where it is used for that request only and never stored server-side. The host key is never sent to the browser at all.
 

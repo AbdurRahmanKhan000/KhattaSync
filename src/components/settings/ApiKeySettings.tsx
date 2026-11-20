@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { AiKeyMode } from "@/types";
 import { getAdminConfig, getSettings, saveSettings } from "@/lib/db";
 import { DEFAULT_MODEL, PROVIDER_LABELS, detectProvider, type AiProvider } from "@/lib/ai/providers";
-import { notifyDataChanged } from "@/components/layout/DashboardContext";
+import { notifyDataChanged, useDashboard } from "@/components/layout/DashboardContext";
 
 const BADGE: Record<AiKeyMode, { label: string; cls: string }> = {
   host: { label: "Host Hosted Key", cls: "bg-emerald-100 text-emerald-800" },
@@ -25,16 +25,21 @@ type TestState =
 export function ApiKeySettings() {
   const [key, setKey] = useState("");
   const [saved, setSaved] = useState(false);
-  const [mode, setMode] = useState<AiKeyMode>("host");
   const [hostWithdrawn, setHostWithdrawn] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [test, setTest] = useState<TestState>({ status: "idle" });
+  // The badge must agree with the dashboard and with the AI route: the
+  // shared apiMode counts the host key ONLY when the server actually has
+  // one configured (via /api/health). The old local computation said
+  // "Host Hosted Key" whenever the Admin had not withdrawn it — even on
+  // a deployment with no server key at all — while the agent correctly
+  // reported "No AI key available". One source of truth now.
+  const { apiMode } = useDashboard();
 
   useEffect(() => {
     void (async () => {
-      const [settings, admin] = await Promise.all([getSettings(), getAdminConfig()]);
+      const admin = await getAdminConfig();
       setHostWithdrawn(admin.hostKeyWithdrawn);
-      setMode(settings.geminiApiKey ? "personal" : admin.hostKeyWithdrawn ? "none" : "host");
       setLoaded(true);
     })();
   }, []);
@@ -51,7 +56,6 @@ export function ApiKeySettings() {
   async function save() {
     const settings = await getSettings();
     await saveSettings({ ...settings, geminiApiKey: key.trim() || undefined });
-    setMode(key.trim() ? "personal" : hostWithdrawn ? "none" : "host");
     setSaved(true);
     setTest({ status: "idle" });
     // The dashboard badge + voice mode read settings through the shared
@@ -84,15 +88,15 @@ export function ApiKeySettings() {
     <section className="rounded-2xl border border-stone-200 bg-white p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-semibold">AI API key — Gemini, OpenAI, or Claude (BYOK)</h2>
-        {loaded ? <ApiKeyStatusBadge mode={mode} /> : null}
+        {loaded ? <ApiKeyStatusBadge mode={apiMode} /> : null}
       </div>
       <p className="mt-1 text-sm text-stone-500">
         Paste any one key in this same bar — Gemini (AIza… or AQ.…), OpenAI (sk-…), or Claude (sk-ant-…). Your key is stored only in this browser (IndexedDB) and sent per-request to the AI route — never stored on a server.
-        {hostWithdrawn ? " The Admin has withdrawn the host key, so AI parsing needs your own key." : " If you enter your own key it takes over from the host key."}
+        {hostWithdrawn ? " The Admin has withdrawn the host key, so AI parsing needs your own key." : apiMode === "host" ? " If you enter your own key it takes over from the host key." : " There is no host key on the server, so AI parsing needs your own key."}
       </p>
-      {mode === "none" ? (
+      {apiMode === "none" ? (
         <p role="alert" className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
-          Host key withdrawn — enter your AI key below to use AI parsing.
+          {hostWithdrawn ? "Host key withdrawn — enter your AI key below to use AI parsing." : "No AI key is set up — enter your AI key below to use AI parsing."}
         </p>
       ) : null}
       <label htmlFor="ai-key" className="sr-only">AI API key (Gemini, OpenAI, or Claude)</label>
@@ -120,7 +124,7 @@ export function ApiKeySettings() {
         <button type="button" onClick={() => void testConnection()} disabled={!key.trim() || test.status === "testing"} className="rounded-xl border border-stone-300 px-4 py-2 text-sm font-medium disabled:opacity-50">
           Test this key
         </button>
-        <button type="button" onClick={() => void (async () => { const s = await getSettings(); await saveSettings({ ...s, geminiApiKey: undefined }); setKey(""); setSaved(false); setTest({ status: "idle" }); setMode(hostWithdrawn ? "none" : "host"); notifyDataChanged(); })()} className="rounded-xl border px-4 py-2 text-sm font-medium">
+        <button type="button" onClick={() => void (async () => { const s = await getSettings(); await saveSettings({ ...s, geminiApiKey: undefined }); setKey(""); setSaved(false); setTest({ status: "idle" }); notifyDataChanged(); })()} className="rounded-xl border px-4 py-2 text-sm font-medium">
           Remove my key
         </button>
       </div>
