@@ -19,6 +19,19 @@ import { friendlyAiErrorMessage } from "../src/lib/ai";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3000";
 const LEDGER_ONLY = "KhattaSync only processes shop sales, customer credit (udhaar), and payment records.";
+
+/** A 1s 440Hz sine WAV (base64) — not speech, but a valid audio file for plumbing tests. */
+function makeTestWav(): string {
+  const sampleRate = 8000, samples = sampleRate;
+  const data = Buffer.alloc(44 + samples * 2);
+  data.write("RIFF", 0); data.writeUInt32LE(36 + samples * 2, 4); data.write("WAVE", 8);
+  data.write("fmt ", 12); data.writeUInt32LE(16, 16); data.writeUInt16LE(1, 20);
+  data.writeUInt16LE(1, 22); data.writeUInt32LE(sampleRate, 24); data.writeUInt32LE(sampleRate * 2, 28);
+  data.writeUInt16LE(2, 32); data.writeUInt16LE(16, 34); data.write("data", 36);
+  data.writeUInt32LE(samples * 2, 40);
+  for (let i = 0; i < samples; i++) data.writeInt16LE(Math.round(Math.sin(2 * Math.PI * 440 * i / sampleRate) * 12000), 44 + i * 2);
+  return data.toString("base64");
+}
 let passed = 0; let failed = 0;
 function check(name: string, ok: boolean, detail = "") {
   if (ok) passed++; else failed++;
@@ -59,6 +72,47 @@ async function main() {
   }
   // A real ledger entry must NOT be blocked.
   check("Ledger entry allowed by gates", !isOffTopic("Bilal took 2 bags of flour 3200, paid 2000 cash, rest udhaar"));
+  // The four inputs a shopkeeper reported as wrongly blocked must pass
+  // the live gate too: with no key configured here they must reach the
+  // no-key outcome, never the ledger-only rejection.
+  const hurriedLive = ["took 200 from faizan", "dena hai 200", "bibi zainab give me 200"];
+  for (const input of hurriedLive) {
+    const res = await fetch(`${BASE}/api/parse-ledger`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ input }),
+    });
+    const data = (await res.json()) as { ok?: boolean; error?: string };
+    check(`Live gate passes hurried entry: "${input}"`, data.ok === false && data.error !== LEDGER_ONLY, `HTTP ${res.status} — ${data.error}`);
+  }
+  // A balance question must be recognised by the live route, not blocked.
+  {
+    const res = await fetch(`${BASE}/api/parse-ledger`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ input: "what is the total credit of bibi Zainab" }),
+    });
+    const data = (await res.json()) as { ok?: boolean; error?: string };
+    check("Live route recognises a ledger question", data.ok === false && (data.error ?? "").includes("local khata"), data.error);
+  }
+  // Voice-note action: a 1s sine WAV is not speech, but it proves the
+  // plumbing — no key => no-key error; fake key => Gemini rejects the
+  // key with the friendly message. Never the ledger-only rejection.
+  const wav = makeTestWav();
+  {
+    const res = await fetch(`${BASE}/api/parse-ledger`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "voice", audio: wav, mimeType: "audio/wav" }),
+    });
+    const data = (await res.json()) as { ok?: boolean; error?: string };
+    check("Live voice action without a key => no-key error, not ledger-only", data.ok === false && data.error !== LEDGER_ONLY, `HTTP ${res.status} — ${data.error}`);
+  }
+  {
+    const res = await fetch(`${BASE}/api/parse-ledger`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "voice", audio: wav, mimeType: "audio/wav", apiKey: "AIzaFakeKeyForTest123" }),
+    });
+    const data = (await res.json()) as { ok?: boolean; error?: string };
+    check("Live voice action with a fake key => friendly key rejection", data.ok === false && /rejected/i.test(data.error ?? ""), `HTTP ${res.status} — ${data.error}`);
+  }
 
   // --- 2) Secrets ---
   const srcFiles = walk(join(root, "src"));

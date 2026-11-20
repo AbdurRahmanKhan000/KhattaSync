@@ -49,10 +49,18 @@ export function containsPromptInjection(input: string): boolean {
 }
 
 const LEDGER_KEYWORDS = [
-  "udhaar", "khata", "gave", "got", "paid", "payment", "due", "credit",
-  "diya", "liya", "baqi", "rupee", "rs", "pkr", "amount", "sale", "sold",
+  // English verbs — every form a hurried shopkeeper uses, not just "gave".
+  "udhaar", "khata", "gave", "give", "given", "got", "get", "took", "take",
+  "paid", "pay", "payment", "due", "credit", "debit", "owe", "owes", "owed",
+  "cash", "rupee", "rupees", "rs", "pkr", "amount", "sale", "sold",
   "purchase", "bought", "stock", "inventory", "remind", "reminder", "collect",
+  "remaining", "balance",
+  // Roman Urdu verbs — dena/lena/diya/liya are how shopkeepers actually speak.
+  "diya", "liya", "dena", "lena", "dene", "lene", "baqi", "baki",
   "atta", "ghee", "cheeni", "sugar", "rice", "oil", "rashan", "daal", "chai",
+  "flour", "bag", "bags",
+  // Pashto: por = debt/credit owed, paisay = money, wakral = gave.
+  "paisay", "paisa", "wakral", "پور", "پیسې", "باقي",
 ];
 
 const OFF_TOPIC_KEYWORDS = [
@@ -66,16 +74,48 @@ const OFF_TOPIC_KEYWORDS = [
   "derivative", "math problem", "physics", "chemistry",
 ];
 
-/** Ledger-only guardrail: the input must be a shop money record or a reminder request. */
+/** True when the input is a question about the ledger itself
+ * ("what is the total credit of bibi Zainab", "kitna udhaar hai").
+ * Queries are answered locally from IndexedDB — they are never blocked
+ * and never sent to Gemini. */
+export function isLedgerQuery(input: string): boolean {
+  const lower = input.toLowerCase().trim();
+  const questionWords = ["what", "how", "kitna", "kitne", "kya", "kis", "who", "show", "tell"];
+  const queryWords = ["total", "credit", "udhaar", "balance", "owe", "owes", "owed", "due", "baqi", "baki", "dena", "lena", "remaining", "collected", "kitna", "por", "paisay"];
+  const startsQuestion = questionWords.some((w) => lower.startsWith(w + " "));
+  const hasQueryWord = queryWords.some((k) => lower.includes(k));
+  if (startsQuestion && hasQueryWord) return true;
+  if (/(how much|kitna|kya).*(owe|udhaar|credit|balance|baqi|baki|dena|lena)/.test(lower)) return true;
+  if (/(total|balance|credit|udhaar).*(of|hai|hain)/.test(lower)) return true;
+  if (/who owes/.test(lower)) return true;
+  return false;
+}
+
+/**
+ * Ledger-only guardrail — permissive by design, because shopkeepers type
+ * in a hurry, in lowercase, in Roman Urdu. The old version demanded a
+ * ledger keyword OR a capitalised name, so real entries like
+ * "took 200 from faizan", "dena hai 200" and "bibi zainab give me 200"
+ * were blocked before Gemini ever saw them. Now:
+ *  - clear off-topic / injection patterns are still blocked first;
+ *  - ledger questions are recognised, not blocked;
+ *  - anything with an amount is a money record — let Gemini + server
+ *    validation judge whether it parses, with a helpful message if not;
+ *  - only inputs with no amount, no ledger word and no question are blocked.
+ */
 export function isOffTopic(input: string): boolean {
   const lower = input.toLowerCase();
   if (OFF_TOPIC_KEYWORDS.some((k) => lower.includes(k))) return true;
   // An equation ("2x+5=10") with no ledger keyword is schoolwork, not a khata entry.
   if (lower.includes("=") && !LEDGER_KEYWORDS.some((k) => lower.includes(k))) return true;
+  if (isLedgerQuery(input)) return false;
   const hasAmount = /\d/.test(input);
-  const hasKeyword = LEDGER_KEYWORDS.some((k) => lower.includes(k));
-  const hasName = /\b[A-Z][a-z]+\b/.test(input);
-  return !(hasAmount && (hasKeyword || hasName));
+  if (hasAmount) return false;
+  const hasKeyword = LEDGER_KEYWORDS.some((k) => lower.includes(k))
+    // "por" (Pashto: debt) as a whole word only - "report"/"support"
+    // contain it but are not ledger words.
+    || /\bpor\b/.test(lower);
+  return !hasKeyword;
 }
 
 export function isLedgerDomain(input: string): boolean {

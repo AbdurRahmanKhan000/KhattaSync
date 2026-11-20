@@ -106,6 +106,9 @@ export default function DashboardPage() {
               thinkingBudget={adminConfig?.thinkingBudget}
               audioEnabled={adminConfig?.audioTranscriptionEnabled ?? true}
               apiMode={apiMode}
+              customers={customers}
+              totalUdhaar={totalUdhaar}
+              collectedToday={collectedToday}
             />
           </div>
         </section>

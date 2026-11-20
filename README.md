@@ -10,7 +10,7 @@ Neighbourhood shops run on credit. A shopkeeper keeps a paper notebook of who to
 
 ## What it does
 
-- **Quick Record (text + voice)** — type or dictate an entry in English, Urdu, or Roman Urdu. Gemini parses it into a strict JSON ledger entry (customer, items, total, paid, credit change) in 1–2 seconds.
+- **Quick Record (text + voice)** — type or dictate an entry in English, Urdu, Pashto, or Roman Urdu. Gemini parses it into a strict JSON ledger entry (customer, items, total, paid, credit change) in 1–2 seconds.
 - **Customer Ledgers (Khata)** — one running balance per customer, with search, *Lena Hai* (receivable) vs *Dena Hai* (payable) totals, and per-customer filtering. Never labelled "Chats" — this is not a chat app.
 - **Ledger table** — filterable history with item breakdowns, timestamps, paid vs credit badges, and one-tap **Mark Paid** (posts the matching payment and settles the entry).
 - **WhatsApp reminders** — one click drafts a polite Urdu/English reminder with Gemini and opens `wa.me` with the message ready, or copies it to the clipboard. Nothing is ever sent automatically.
@@ -184,6 +184,6 @@ The audit script (`scripts/verify-audit.ts`) checks, live against the production
 ## Status & limits (honest notes)
 
 - **Live Gemini calls are not verified in this repo's CI** — no key is configured here. Test with a real key before demoing.
-- Voice dictation uses the browser Web Speech API (English/Urdu); where it is unavailable, audio is recorded locally only and the user is told to type instead — transcription is never faked.
+- Voice input has two paths. With a Gemini key available, the mic records a **voice note and Gemini transcribes + parses the audio itself** — the accurate path for Pashto and Urdu speech. Without a key, the browser's Web Speech API dictates live into the text box (English/Urdu/Pashto, with language fallback). Audio is sent to Gemini for that request only and is never stored.
 - `gemini-3.8-flash` / `gemini-3.5-flash-lite` are the model names in the owner's specification; confirm they exist in the Gemini model list for your project before demoing.
 - The Admin Vault password hash is client-side by design (there is no server account system in v1) — it gates the controls in the browser, it is not a server-side access control.
