@@ -151,6 +151,11 @@ async function main(): Promise<void> {
 
   // (e) Multi-provider: one key bar, provider detected from the key itself.
   check("(e) Gemini key detected", detectProvider("AIzaSyAbc123") === "gemini");
+  // Since May 28, 2026 Google AI Studio issues auth keys starting with
+  // "AQ." (e.g. AQ.Ab8...) — plain API keys on the same header, not OAuth.
+  check("(e) Gemini AQ. auth key detected", detectProvider("AQ.Ab8RN6IxkvazkDr16g5K123456") === "gemini");
+  check("(e) Gemini AQ key without the dot still detected", detectProvider("AQAb8RN6IxkvazkDr16g5K123456") === "gemini");
+  check("(e) Short AQ-like text is not a key", detectProvider("AQ") === null);
   check("(e) OpenAI key detected", detectProvider("sk-proj-Abc123") === "openai");
   check("(e) OpenAI legacy key detected", detectProvider("sk-Abc123") === "openai");
   check("(e) Claude key detected", detectProvider("sk-ant-api03-Abc123") === "claude");
@@ -213,6 +218,8 @@ async function main(): Promise<void> {
     friendlyAiErrorMessage(new Error("AI output items do not add up to total_amount."), "gemini").includes("do not add up"));
   check("(g) Error detail redacts keys",
     !sanitizeAiErrorDetail(new Error("401: API key not valid. AIzaSyAbc123XYZ")).includes("AIzaSyAbc123XYZ"));
+  check("(g) Error detail redacts AQ. keys too",
+    !sanitizeAiErrorDetail(new Error("401: API key not valid. AQ.Ab8RN6IxkvazkDr16g5K123456")).includes("AQ.Ab8RN6IxkvazkDr16g5K123456"));
   check("(g) Error detail keeps the provider's own words",
     sanitizeAiErrorDetail(new Error("404: models/gemini-3.8-flash is not found")).includes("is not found"));
 

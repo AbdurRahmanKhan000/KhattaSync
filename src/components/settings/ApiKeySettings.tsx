@@ -45,7 +45,7 @@ export function ApiKeySettings() {
   const detectedLabel = key.trim()
     ? typedProvider
       ? `Detected: ${PROVIDER_LABELS[typedProvider]} — model ${DEFAULT_MODEL[typedProvider]}`
-      : "Unknown key — Gemini keys start with AIza, OpenAI with sk-, Claude with sk-ant-"
+      : "Unknown key — Gemini keys start with AIza or AQ., OpenAI with sk-, Claude with sk-ant-"
     : null;
 
   async function save() {
@@ -87,7 +87,7 @@ export function ApiKeySettings() {
         {loaded ? <ApiKeyStatusBadge mode={mode} /> : null}
       </div>
       <p className="mt-1 text-sm text-stone-500">
-        Paste any one key in this same bar — Gemini (AIza…), OpenAI (sk-…), or Claude (sk-ant-…). Your key is stored only in this browser (IndexedDB) and sent per-request to the AI route — never stored on a server.
+        Paste any one key in this same bar — Gemini (AIza… or AQ.…), OpenAI (sk-…), or Claude (sk-ant-…). Your key is stored only in this browser (IndexedDB) and sent per-request to the AI route — never stored on a server.
         {hostWithdrawn ? " The Admin has withdrawn the host key, so AI parsing needs your own key." : " If you enter your own key it takes over from the host key."}
       </p>
       {mode === "none" ? (
@@ -96,7 +96,7 @@ export function ApiKeySettings() {
         </p>
       ) : null}
       <label htmlFor="ai-key" className="sr-only">AI API key (Gemini, OpenAI, or Claude)</label>
-      <input id="ai-key" type="password" value={key} onChange={(e) => { setKey(e.target.value); setSaved(false); setTest({ status: "idle" }); }} placeholder="AIza… / sk-… / sk-ant-…" autoComplete="off"
+      <input id="ai-key" type="password" value={key} onChange={(e) => { setKey(e.target.value); setSaved(false); setTest({ status: "idle" }); }} placeholder="AIza… / AQ.… / sk-… / sk-ant-…" autoComplete="off"
         className="mt-3 w-full rounded-xl border border-stone-300 px-4 py-2.5 text-sm outline-none focus:border-emerald-600" />
       {detectedLabel ? (
         <p className={`mt-2 text-sm ${typedProvider ? "text-emerald-700" : "text-amber-700"}`}>{detectedLabel}</p>

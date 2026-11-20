@@ -99,6 +99,7 @@ export function sanitizeAiErrorDetail(err: unknown): string {
   const raw = `${e?.status ? `${e.status} ` : ""}${e?.code ? `${e.code}: ` : ""}${e?.message ?? ""}`.trim();
   const redacted = raw
     .replace(/(AIza[0-9A-Za-z\-_]{10,})/g, "[key]")
+    .replace(/(AQ\.[0-9A-Za-z\-_]{10,})/g, "[key]")
     .replace(/(sk-(?:ant-|proj-)?[0-9A-Za-z\-_]{10,})/g, "[key]")
     .replace(/(Bearer\s+)[^\s]+/gi, "$1[key]");
   return redacted.slice(0, 300) || "Unknown error";

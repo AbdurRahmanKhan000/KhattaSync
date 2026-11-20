@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: message, keyMode: "none", parsed: rejectedResult(message) });
     }
     if (!resolved.provider) {
-      const message = "That key doesn't look like a Gemini, OpenAI, or Claude key — paste the full key from your provider's dashboard (Gemini keys start with AIza, OpenAI with sk-, Claude with sk-ant-).";
+      const message = "That key doesn't look like a Gemini, OpenAI, or Claude key — paste the full key from your provider's dashboard (Gemini keys start with AIza or AQ., OpenAI with sk-, Claude with sk-ant-).";
       return NextResponse.json({ ok: false, error: message, keyMode: resolved.mode, parsed: rejectedResult(message) });
     }
     providerForError = resolved.provider;

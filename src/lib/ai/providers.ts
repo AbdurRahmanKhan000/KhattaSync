@@ -8,7 +8,9 @@ import type { AiModel } from "../../types";
  * shopkeeper pastes whichever key they have and it just works.
  *
  * Key shapes (public prefixes, no secret material):
- *   Gemini  "AIza..."        -> gemini
+ *   Gemini  "AIza..." or "AQ...." (since May 28, 2026 Google AI Studio
+ *           issues auth keys starting with "AQ." — plain API keys on the
+ *           same x-goog-api-key header, not OAuth) -> gemini
  *   OpenAI  "sk-..." / "sk-proj-..." -> openai
  *   Claude  "sk-ant-..."     -> claude
  */
@@ -22,7 +24,9 @@ export const PROVIDER_LABELS: Record<AiProvider, string> = {
 
 export function detectProvider(apiKey: string): AiProvider | null {
   const k = apiKey.trim();
-  if (k.startsWith("AIza")) return "gemini";
+  // Gemini: legacy AIza keys and the current AQ. auth keys (e.g. AQ.Ab8...).
+  // The AQ. form is accepted with or without the dot, in case a paste drops it.
+  if (k.startsWith("AIza") || k.startsWith("AQ.") || /^AQ[A-Za-z0-9\-_]{10,}$/.test(k)) return "gemini";
   if (k.startsWith("sk-ant-")) return "claude";
   if (k.startsWith("sk-proj-") || k.startsWith("sk-")) return "openai";
   return null;

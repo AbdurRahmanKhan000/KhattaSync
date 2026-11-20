@@ -160,6 +160,18 @@ async function main() {
     check("Live ping with a fake Gemini key => friendly rejection + provider detail",
       data.ok === false && /rejected/i.test(data.error ?? "") && (data.detail ?? "").length > 0, `HTTP ${res.status} — ${data.error} | detail: ${data.detail}`);
   }
+  // The current Google format is "AQ." (auth keys, since May 28, 2026) —
+  // a fake AQ. key must reach Gemini and come back as a key rejection,
+  // never as an "unknown key" refusal.
+  {
+    const res = await fetch(`${BASE}/api/parse-ledger`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "ping", apiKey: "AQ.Ab8RN6IxkvazkDr16g5K123456" }),
+    });
+    const data = (await res.json()) as { ok?: boolean; error?: string; detail?: string; provider?: string };
+    check("Live ping with a fake AQ. key => routed to Gemini, key rejection",
+      data.ok === false && data.provider === "gemini" && /rejected/i.test(data.error ?? ""), `HTTP ${res.status} — ${data.error}`);
+  }
 
   // --- 2) Secrets ---
   const srcFiles = walk(join(root, "src"));
