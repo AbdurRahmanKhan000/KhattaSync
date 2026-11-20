@@ -101,10 +101,31 @@ export interface ParseLedgerOptions {
   thinkingBudget?: ThinkingBudget;
 }
 
+/** Turn a raw Gemini / network failure into a message a shopkeeper can act on. */
+export function friendlyAiErrorMessage(err: unknown): string {
+  const e = err as { status?: number; code?: string; message?: string } | null;
+  const text = `${e?.status ?? ""} ${e?.code ?? ""} ${e?.message ?? ""}`;
+  // Already friendly (e.g. thrown by parseLedgerWithAi itself): pass it
+  // through unchanged instead of re-mapping it into the generic message.
+  if (/Gemini is busy|key was rejected|Could not reach Gemini|AI parsing failed/i.test(text)) return e?.message ?? "AI parsing failed — please try again.";
+  if (/429|RESOURCE_EXHAUSTED|rate.?limit|quota/i.test(text)) {
+    return "Gemini is busy right now (rate limit) — wait a minute and try again.";
+  }
+  if (/400|401|403|API_KEY_INVALID|PERMISSION_DENIED|UNAUTHENTICATED|invalid (api )?key/i.test(text)) {
+    return "That Gemini API key was rejected — check the key in Settings (your own key, or ask the Admin to restore the host key).";
+  }
+  if (/fetch failed|network|ECONNREFUSED|ETIMEDOUT|ENOTFOUND/i.test(text)) {
+    return "Could not reach Gemini — check your internet connection and try again.";
+  }
+  return "AI parsing failed — please try again.";
+}
+
 export async function parseLedgerWithAi(input: string, opts: ParseLedgerOptions): Promise<ParsedLedgerResult> {
   const model = opts.model && ALLOWED_MODELS.includes(opts.model) ? opts.model : GEMINI_MODEL;
   const ai = getGeminiClient(opts.apiKey);
-  const res = await ai.models.generateContent({
+  let res;
+  try {
+    res = await ai.models.generateContent({
     model,
     contents: `Input: ${input}`,
     config: {
@@ -114,6 +135,9 @@ export async function parseLedgerWithAi(input: string, opts: ParseLedgerOptions)
       thinkingConfig: { thinkingBudget: THINKING_BUDGETS[opts.thinkingBudget ?? "standard"] },
     },
   });
+  } catch (err) {
+    throw new Error(friendlyAiErrorMessage(err));
+  }
   const text = res.text ?? "";
   let parsed: unknown;
   try {

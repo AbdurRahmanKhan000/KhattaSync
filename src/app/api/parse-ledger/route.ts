@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { containsPromptInjection, isOffTopic, rejectedResult } from "@/lib/security";
-import { ALLOWED_MODELS, generateReminderDraft, parseLedgerWithAi, resolveAiKey, type ParseLedgerOptions } from "@/lib/ai";
+import { ALLOWED_MODELS, friendlyAiErrorMessage, generateReminderDraft, parseLedgerWithAi, resolveAiKey, type ParseLedgerOptions } from "@/lib/ai";
 import { ERROR_MESSAGES } from "@/constants";
 import type { AiModel, ThinkingBudget } from "@/types";
 
@@ -20,14 +20,14 @@ export async function POST(req: NextRequest) {
     };
     const action = body.action === "reminder" ? "reminder" : "parse";
     const input = typeof body.input === "string" ? body.input.trim() : "";
-    if (!input) return NextResponse.json({ ok: false, error: ERROR_MESSAGES.missingCustomer, parsed: rejectedResult(ERROR_MESSAGES.missingCustomer) }, { status: 400 });
+    if (!input) return NextResponse.json({ ok: false, error: ERROR_MESSAGES.missingCustomer, parsed: rejectedResult(ERROR_MESSAGES.missingCustomer) });
 
     // Gate 1 + 2: injection and domain, before any Gemini call.
     if (containsPromptInjection(input)) {
-      return NextResponse.json({ ok: false, error: ERROR_MESSAGES.ledgerOnly, parsed: rejectedResult(ERROR_MESSAGES.ledgerOnly) }, { status: 400 });
+      return NextResponse.json({ ok: false, error: ERROR_MESSAGES.ledgerOnly, parsed: rejectedResult(ERROR_MESSAGES.ledgerOnly) });
     }
     if (isOffTopic(input)) {
-      return NextResponse.json({ ok: false, error: ERROR_MESSAGES.ledgerOnly, parsed: rejectedResult(ERROR_MESSAGES.ledgerOnly) }, { status: 400 });
+      return NextResponse.json({ ok: false, error: ERROR_MESSAGES.ledgerOnly, parsed: rejectedResult(ERROR_MESSAGES.ledgerOnly) });
     }
 
     // Key resolution: BYOK wins; host key only if the Admin has not withdrawn it.
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     });
     if (!resolved.apiKey) {
       const message = hostKeyAllowed ? ERROR_MESSAGES.noAiKey : ERROR_MESSAGES.hostKeyWithdrawn;
-      return NextResponse.json({ ok: false, error: message, keyMode: "none", parsed: rejectedResult(message) }, { status: 400 });
+      return NextResponse.json({ ok: false, error: message, keyMode: "none", parsed: rejectedResult(message) });
     }
 
     const model: AiModel = typeof body.model === "string" && (ALLOWED_MODELS as string[]).includes(body.model) ? (body.model as AiModel) : "gemini-3.8-flash";
@@ -56,11 +56,15 @@ export async function POST(req: NextRequest) {
     // Gate 3 happens inside parseLedgerWithAi (responseSchema + server validation).
     const parsed = await parseLedgerWithAi(input, opts);
     if (!parsed.is_valid_ledger_entry) {
-      return NextResponse.json({ ok: false, error: parsed.rejection_reason || ERROR_MESSAGES.ledgerOnly, keyMode: resolved.mode, model, parsed }, { status: 400 });
+      return NextResponse.json({ ok: false, error: parsed.rejection_reason || ERROR_MESSAGES.ledgerOnly, keyMode: resolved.mode, model, parsed });
     }
     return NextResponse.json({ ok: true, keyMode: resolved.mode, model, parsed });
   } catch (err) {
-    const message = err instanceof Error ? err.message : ERROR_MESSAGES.generic;
-    return NextResponse.json({ ok: false, error: message, parsed: rejectedResult(message) }, { status: 500 });
+    // Expected AI failures (rate limit, rejected key, network) are app
+    // outcomes, not transport failures — return 200 + ok:false so the
+    // browser console stays clean. Truly unexpected errors still surface
+    // the friendly message, never a stack trace.
+    const message = err instanceof Error ? friendlyAiErrorMessage(err) : ERROR_MESSAGES.generic;
+    return NextResponse.json({ ok: false, error: message, parsed: rejectedResult(message) });
   }
 }

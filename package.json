@@ -9,7 +9,8 @@
     "lint": "eslint",
     "verify:db": "tsx scripts/verify-db.ts",
     "verify:ai": "tsx scripts/verify-ai.ts",
-    "verify:all": "npm run verify:db && npm run verify:ai"
+    "verify:all": "npm run verify:db && npm run verify:ai && npm run verify:audit",
+    "verify:audit": "tsx scripts/verify-audit.ts"
   },
   "dependencies": {
     "@google/genai": "^3.6.1",

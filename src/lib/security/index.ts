@@ -60,12 +60,18 @@ const OFF_TOPIC_KEYWORDS = [
   "javascript", "poem", "story", "movie", "song", "weather", "news", "football",
   "cricket score", "who won", "capital of", "translate this", "write a",
   "tell me about", "explain quantum", "how to hack",
+  // Maths / schoolwork — previously slipped through because "Solve 2x+5=10"
+  // has digits and a capitalised word, which looked ledger-like.
+  "solve", "equation", "calculate", "algebra", "geometry", "integral",
+  "derivative", "math problem", "physics", "chemistry",
 ];
 
 /** Ledger-only guardrail: the input must be a shop money record or a reminder request. */
 export function isOffTopic(input: string): boolean {
   const lower = input.toLowerCase();
   if (OFF_TOPIC_KEYWORDS.some((k) => lower.includes(k))) return true;
+  // An equation ("2x+5=10") with no ledger keyword is schoolwork, not a khata entry.
+  if (lower.includes("=") && !LEDGER_KEYWORDS.some((k) => lower.includes(k))) return true;
   const hasAmount = /\d/.test(input);
   const hasKeyword = LEDGER_KEYWORDS.some((k) => lower.includes(k));
   const hasName = /\b[A-Z][a-z]+\b/.test(input);
